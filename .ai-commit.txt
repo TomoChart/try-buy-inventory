@@ -1,0 +1,1 @@
+Initial scaffold for YOUniversity Try & Buy Admin project with Next.js frontend and Express backend.

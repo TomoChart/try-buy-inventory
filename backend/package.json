@@ -1,0 +1,12 @@
+{
+  "name": "youniversity-backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.0",
+    "prisma": "^4.0.0"
+  }
+}
