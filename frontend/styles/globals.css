@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.sidebar {
+  width: 200px;
+  background-color: #f8f9fa;
+}
