@@ -26,22 +26,24 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Read SPEC
-        id: spec
+      - name: Read SPEC (base64)
         run: |
-          echo "SPEC<<EOF" >> $GITHUB_OUTPUT
-          cat "${{ github.event.inputs.spec_path || '.blueprints/spec.md' }}" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          SPEC_PATH="${{ github.event.inputs.spec_path || '.blueprints/spec.md' }}"
+          SPEC_B64=$(base64 -w0 "$SPEC_PATH" || base64 "$SPEC_PATH")
+          echo "SPEC_B64=$SPEC_B64" >> $GITHUB_ENV
+
 
       - name: Call OpenAI to generate files
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SPEC_B64: ${{ env.SPEC_B64 }}
         run: |
           node <<'JS'
           import fs from 'fs';
           import https from 'https';
 
-          const spec = `\n${{ steps.spec.outputs.SPEC }}\n`;
+          const spec = Buffer.from(process.env.SPEC_B64 || '', 'base64').toString('utf8');
+
           const systemMsg = `
           You are a senior full‑stack engineer. Output STRICT JSON:
           {
@@ -86,7 +88,10 @@ jobs:
                     const data = JSON.parse(body);
                     const out = JSON.parse(data.choices[0].message.content);
                     resolve(out);
-                  } catch (e) { reject(new Error(body)); }
+                  } catch (e) {
+                    console.error('OpenAI response error:\n', body);
+                    reject(e);
+                  }
                 });
               });
               req.on('error', reject);
@@ -97,7 +102,6 @@ jobs:
 
           const out = await callOpenAI();
 
-          // write files
           for (const f of out.files) {
             const dir = f.path.split('/').slice(0,-1).join('/');
             if (dir) fs.mkdirSync(dir, { recursive: true });
@@ -107,6 +111,7 @@ jobs:
           fs.writeFileSync(".ai-notes.txt", out.notes || "");
           fs.writeFileSync(".ai-commit.txt", out.commitMessage || "AI: scaffold/update");
           JS
+
 
       - name: Create PR with changes
         uses: peter-evans/create-pull-request@v6
