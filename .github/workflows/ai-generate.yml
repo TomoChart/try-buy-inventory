@@ -10,6 +10,10 @@ on:
   push:
     paths: [".blueprints/**"]
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   ai-generate:
     runs-on: ubuntu-latest
@@ -22,109 +26,100 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install deps for generator
-        run: |
-          mkdir -p .ai
-          npm init -y >/dev/null 2>&1 || true
-          npm i --silent js-yaml
-
       - name: Read SPEC
         id: spec
         run: |
-          SPEC_CONTENT="$(cat ${{ github.event.inputs.spec_path || '.blueprints/spec.md' }})"
           echo "SPEC<<EOF" >> $GITHUB_OUTPUT
-          echo "$SPEC_CONTENT" >> $GITHUB_OUTPUT
+          cat "${{ github.event.inputs.spec_path || '.blueprints/spec.md' }}" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Call OpenAI to generate file plan + contents
+      - name: Call OpenAI to generate files
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           node <<'JS'
-          const fs = require('fs');
-          const spec = process.env.SPEC || `\n${{ steps.spec.outputs.SPEC }}\n`;
+          import fs from 'fs';
+          import https from 'https';
 
-          const system = `
-You are a senior full‑stack engineer. Output STRICT JSON:
-{
-  "commitMessage": "string",
-  "files": [
-    {"path": "frontend/...","content": "string"},
-    {"path": "backend/...","content": "string"}
-  ],
-  "notes": "short rationale"
-}
-Rules:
-- Next.js 14 + Tailwind frontend with pages: /login, /trybuy, /devices, /reports, /btl, /imports, /settings (sidebar).
-- Express backend with stub routes for auth, locations, devices, applications, loans, btl, reports, imports.
-- Provide working package.json for both apps, minimal configs, and .env.example files.
-- DO NOT write secrets. No binary files. Keep each file under 200KB.
-`;
+          const spec = `\n${{ steps.spec.outputs.SPEC }}\n`;
+          const systemMsg = `
+          You are a senior full‑stack engineer. Output STRICT JSON:
+          {
+            "commitMessage": "string",
+            "files": [
+              {"path": "frontend/...","content": "string"},
+              {"path": "backend/...","content": "string"}
+            ],
+            "notes": "string"
+          }`;
 
-          const user = `
-Project SPEC:
-${spec}
+          const userMsg = `
+          Project SPEC:
+          ${spec}
+          Return initial scaffold: Next.js 14 FE (pages: /login, /trybuy, /devices, /reports, /btl, /imports, /settings with sidebar) + Express BE (stub routes). Include package.json and .env.example for both. No binaries.`;
 
-Return files to implement the skeleton + basic UI stubs and API stubs, as described.
-`;
+          const payload = JSON.stringify({
+            model: "gpt-4o",
+            temperature: 0.2,
+            messages: [
+              { role: "system", content: systemMsg },
+              { role: "user", content: userMsg }
+            ],
+            response_format: { type: "json_object" }
+          });
 
-          async function call() {
-            const r = await fetch("https://api.openai.com/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                "Authorization": "Bearer " + process.env.OPENAI_API_KEY,
-                "Content-Type": "application/json"
-              },
-              body: JSON.stringify({
-                model: "gpt-4o",
-                temperature: 0.2,
-                messages: [
-                  {role:"system", content: system},
-                  {role:"user", content: user}
-                ],
-                response_format: { type: "json_object" }
-              })
+          function callOpenAI() {
+            return new Promise((resolve, reject) => {
+              const req = https.request({
+                hostname: 'api.openai.com',
+                path: '/v1/chat/completions',
+                method: 'POST',
+                headers: {
+                  'Authorization': 'Bearer ' + process.env.OPENAI_API_KEY,
+                  'Content-Type': 'application/json'
+                }
+              }, res => {
+                let body = '';
+                res.on('data', c => body += c);
+                res.on('end', () => {
+                  try {
+                    const data = JSON.parse(body);
+                    const out = JSON.parse(data.choices[0].message.content);
+                    resolve(out);
+                  } catch (e) { reject(new Error(body)); }
+                });
+              });
+              req.on('error', reject);
+              req.write(payload);
+              req.end();
             });
-            if (!r.ok) {
-              console.error(await r.text());
-              process.exit(1);
-            }
-            const data = await r.json();
-            const out = JSON.parse(data.choices[0].message.content);
-
-            // write files
-            for (const f of out.files) {
-              const dir = f.path.split('/').slice(0, -1).join('/');
-              if (dir) fs.mkdirSync(dir, { recursive: true });
-              fs.writeFileSync(f.path, f.content);
-              console.log("Wrote", f.path);
-            }
-            fs.writeFileSync(".ai/notes.txt", out.notes || "");
-            fs.writeFileSync(".ai/commitmsg.txt", out.commitMessage || "AI: scaffold/update");
           }
-          call().catch(e => { console.error(e); process.exit(1); });
+
+          const out = await callOpenAI();
+
+          // write files
+          for (const f of out.files) {
+            const dir = f.path.split('/').slice(0,-1).join('/');
+            if (dir) fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(f.path, f.content);
+            console.log("Wrote", f.path);
+          }
+          fs.writeFileSync(".ai-notes.txt", out.notes || "");
+          fs.writeFileSync(".ai-commit.txt", out.commitMessage || "AI: scaffold/update");
           JS
 
-      - name: Create branch and commit
-        run: |
-          BR="ai/gen-$(date +%Y%m%d-%H%M%S)"
-          git checkout -b "$BR"
-          git add -A
-          MSG="$(cat .ai/commitmsg.txt || echo 'AI: scaffold/update')"
-          git -c user.name="ai-bot" -c user.email="ai-bot@users.noreply.github.com" commit -m "$MSG" || echo "No changes"
-          git push --set-upstream origin "$BR"
-
-      - name: Open Pull Request
+      - name: Create PR with changes
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ github.token }}
-          commit-message: "$(cat .ai/commitmsg.txt || echo 'AI: scaffold/update')"
-          branch: ${{ steps.create_branch.outputs.branch || '' }}
-          title: "AI codegen: $(date +'%Y-%m-%d %H:%M')"
+          title: "AI codegen: ${{ github.run_id }}"
           body: |
-            AI generated changes based on ${{ github.event.inputs.spec_path || '.blueprints/spec.md' }}.
+            Generated from ${{ github.event.inputs.spec_path || '.blueprints/spec.md' }}.
+
             Notes:
             ```
-            $(cat .ai/notes.txt || echo '(none)')
+            ${{ steps.spec.outputs.SPEC }}
             ```
+          commit-message: "$(cat .ai-commit.txt || echo 'AI: scaffold/update')"
+          branch: "ai/gen-${{ github.run_id }}"
+          delete-branch: true
           base: "main"
