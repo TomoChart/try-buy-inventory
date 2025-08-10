@@ -21,22 +21,22 @@ export default function Login() {
   }, [ready, router])
 
   async function handleSubmit(e) {
-  e.preventDefault();
-  try {
-    const base = process.env.NEXT_PUBLIC_BACKEND_URL;
-    const r = await fetch(`${base}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password })
-    });
-    if (!r.ok) throw new Error("Bad credentials");
-    const data = await r.json();
-    window.localStorage.setItem("you_token", data.token);
-    window.location.href = "/dashboard";
-  } catch (err) {
-    alert("Login failed");
+    e.preventDefault();
+    try {
+      const base = process.env.NEXT_PUBLIC_BACKEND_URL;
+      const r = await fetch(`${base}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+      if (!r.ok) throw new Error("Bad credentials");
+      const data = await r.json();
+      window.localStorage.setItem("you_token", data.token);
+      window.location.href = "/dashboard";
+    } catch (err) {
+      alert("Login failed");
+    }
   }
-}
 
 
   // dok ne “oživimo” na klijentu, prikaži minimalni UI ili ništa

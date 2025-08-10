@@ -18,20 +18,36 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 
-// --- CORS (više domena odvojenih zarezom) ---
-const allowed = (process.env.CORS_ORIGINS || "")
+// --- CORS (više domena; podržava wildcard *.vercel.app i "*") ---
+const allowList = (process.env.CORS_ORIGINS || "")
   .split(",")
   .map(s => s.trim())
   .filter(Boolean);
 
-app.use(
-  cors({
-    origin: (origin, cb) => {
-      if (!origin || allowed.length === 0 || allowed.includes(origin)) return cb(null, true);
-      return cb(new Error("Not allowed by CORS"), false);
+function isAllowedOrigin(origin) {
+  if (!origin) return true;                          // server-side calls / curl
+  if (allowList.length === 0) return true;           // ako nije postavljeno, pusti sve
+  if (allowList.includes("*")) return true;          // globalno dopušteno
+  if (allowList.includes(origin)) return true;       // točan match
+  // wildcard match za npr. https://*.vercel.app
+  const o = origin.replace(/^https?:\/\//, "");
+  return allowList.some(rule => {
+    if (rule.startsWith("https://*.")) {
+      const r = rule.replace(/^https?:\/\//, "").replace(/^\*\./, "");
+      return o.endsWith(r);
     }
-  })
-);
+    return false;
+  });
+}
+
+const corsOptions = {
+  origin: (origin, cb) => (isAllowedOrigin(origin) ? cb(null, true) : cb(new Error("Not allowed by CORS"))),
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // preflight
 
 // --- Health check ---
 app.get("/", (_req, res) => {
