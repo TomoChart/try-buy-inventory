@@ -1,9 +1,15 @@
-const express = require('express');
-const router = express.Router();
+import { Router } from "express";
+const router = Router();
 
-// GDPR routes
-router.get('/', (req, res) => {
-  res.send('Get GDPR queue');
+const gdprQueue = []; // { application_id, ready_on, confirmed_deleted_at }
+
+router.get("/pending", (_req, res) => res.json({ items: gdprQueue }));
+
+router.post("/delete/:applicationId", (req, res) => {
+  const { applicationId } = req.params;
+  const i = gdprQueue.findIndex(x => x.application_id === applicationId);
+  if (i >= 0) gdprQueue.splice(i, 1);
+  res.json({ ok: true, deleted: applicationId });
 });
 
-module.exports = router;
+export default router;

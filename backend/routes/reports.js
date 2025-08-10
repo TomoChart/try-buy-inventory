@@ -1,9 +1,15 @@
-const express = require('express');
-const router = express.Router();
+import { Router } from "express";
+const router = Router();
 
-// Reports routes
-router.get('/', (req, res) => {
-  res.send('Get reports');
+// Stub – kasnije ćemo računati iz DB-a
+router.get("/weekly", (req, res) => {
+  const { country = "HR" } = req.query;
+  res.json({
+    country,
+    utilizationPct: 0.0,
+    avgQueueDaysByModel: [],
+    counts: { applied: 0, issued: 0, returned: 0 }
+  });
 });
 
-module.exports = router;
+export default router;

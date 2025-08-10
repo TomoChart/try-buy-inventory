@@ -6,7 +6,10 @@ function Dashboard() {
 
   useEffect(() => {
     const base = process.env.NEXT_PUBLIC_BACKEND_URL;
-    fetch(`${base}/`)
+    const token = localStorage.getItem("you_token");
+    fetch(`${base}/devices?country=HR`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
       .then(r => r.json())
       .then(j => setApi(JSON.stringify(j)))
       .catch(() => setApi("API unreachable"));

@@ -1,9 +1,12 @@
-const express = require('express');
-const router = express.Router();
+import { Router } from "express";
+const router = Router();
 
-// Imports routes
-router.post('/', (req, res) => {
-  res.send('Import data');
+/**
+ * CSV import stub – u produkciji ćemo parsirati CSV (kolone točno: full_name, username, email, phone, city)
+ * i kreirati applications po odabranom programu/zemlji u UI-ju.
+ */
+router.post("/applications", (_req, res) => {
+  res.json({ ok: true, message: "CSV import stub (applications)" });
 });
 
-module.exports = router;
+export default router;
