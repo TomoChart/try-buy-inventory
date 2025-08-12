@@ -100,7 +100,10 @@ app.delete("/users/:id", requireAuth, requireRole("superadmin", "country_admin")
 });
 
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// VAŽNO: slušaj na 0.0.0.0 da Fly proxy može doći do appa
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
+  });
 
 // Graceful shutdown
 process.on("SIGINT", async () => {
