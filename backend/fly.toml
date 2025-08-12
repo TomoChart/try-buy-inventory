@@ -3,25 +3,17 @@
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'try-buy-backend'
-primary_region = 'ams'
-
-[build]
-
-[[mounts]]
-  source = 'data'
-  destination = '/data'
+app = "try-buy-backend"
+primary_region = "ams"
 
 [http_service]
-  internal_port = 8080
+  internal_port = 8080        # bez podvlake; mora biti 8080 kao integer
   force_https = true
-   auto_stop_machines = 'stop'
+  auto_stop_machines = false
   auto_start_machines = true
-  min_machines_running = 0
-  processes = ['app']
+  min_machines_running = 1
+  processes = ["app"]         # može ostati; nije problem
 
-
-[[vm]]
-  memory = '1gb'
-  cpu_kind = 'shared'
-  cpus = 1
+[mounts]
+  source = "data"             # IME volumena MORA biti "data"
+  destination = "/data"
