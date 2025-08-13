@@ -1,38 +1,32 @@
-# syntax = docker/dockerfile:1
+# syntax=docker/dockerfile:1
 
-# Adjust NODE_VERSION as desired
-ARG NODE_VERSION=22.17.0
-FROM node:${NODE_VERSION}-slim AS base
-
-LABEL fly_launch_runtime="Node.js"
-
-# Node.js app lives here
+# 1) Instaliraj production deps
+FROM node:20-alpine AS deps
 WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
 
-# Set production environment
-ENV NODE_ENV="production"
-
-# Throw-away build stage to reduce size of final image
-FROM base AS build
-
-# Install packages needed to build node modules
-RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y build-essential node-gyp pkg-config python-is-python3
-
-# Install node modules
-COPY package.json ./
-RUN npm install
-
-# Copy application code
+# 2) Build sloj: dev deps (prisma), generate
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
 COPY . .
+# generira @prisma/client iz prisma/schema.prisma
+RUN npx prisma generate
 
+# 3) Runtime sloj
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
 
-# Final stage for app image
-FROM base
+# Kopiraj node_modules i app
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=build /app ./
 
-# Copy built application
-COPY --from=build /app /app
-
-# Start the server by default, this can be overwritten at runtime
+# osiguraj mount točku za volume
+RUN mkdir -p /data
 EXPOSE 8080
-CMD [ "npm", "run", "start" ]
+
+# Na startu: primijeni migracije pa digni server
+CMD ["sh", "-c", "npx prisma migrate deploy && node index.js"]
