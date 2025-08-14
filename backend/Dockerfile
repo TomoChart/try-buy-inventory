@@ -1,33 +1,34 @@
 # syntax=docker/dockerfile:1
 
-# ---- BUILD STAGE: install deps (uklj. dev), generate prisma client ----
+# ---- BUILD: deps + prisma generate ----
 FROM node:20-bookworm-slim AS build
 WORKDIR /app
-
-# Brži cache za instalaciju
 COPY package*.json ./
 RUN npm ci
-
-# Kopiraj ostatak koda i generiraj Prisma client
 COPY . .
+# generiraj @prisma/client (engini će se spakirati u node_modules/.prisma)
 RUN npx prisma generate
 
-# ---- RUNTIME STAGE: openssl + app ----
+# ---- RUNTIME ----
 FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-EXPOSE 8080
+# >>> KLUČNO za Prisma na Debian/bookworm:
+ENV PRISMA_CLIENT_ENGINE_TYPE=binary
+# (opcionalno, ali može pomoći u nekim setupima)
+ENV PRISMA_CLI_QUERY_ENGINE_TYPE=binary
 
-# OpenSSL za Prisma engines
+# OpenSSL runtime za Prisma (libssl3 + certs)
 RUN apt-get update -y \
- && apt-get install -y --no-install-recommends openssl ca-certificates \
+ && apt-get install -y --no-install-recommends libssl3 openssl ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
-# Kopiraj sve iz build stage-a (uklj. node_modules s generiranim @prisma/client)
+# kopiraj build (uklj. node_modules s generiranim klijentom)
 COPY --from=build /app /app
 
-# Mount točka za Fly volume
+# mount točka za Fly volume
 RUN mkdir -p /data
+EXPOSE 8080
 
-# Na startu: primijeni migracije pa pokreni server
+# na startu: migracije -> server
 CMD ["bash", "-lc", "npx prisma migrate deploy && node index.js"]
