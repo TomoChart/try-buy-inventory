@@ -50,8 +50,13 @@ function requireRole(...roles) {
 }
 
 // Health
-app.get("/", (_req, res) => res.send("Backend is running"));
-app.get("/healthz", (_req, res) => res.json({ status: "ok" }));
+app.get('/', (req, res) => {
+  res.send({ status: 'OK', message: 'Try Buy Backend API running' });
+});
+
+app.get('/healthz', (req, res) => {
+  res.status(200).send({ status: 'healthy' });
+});
 
 // Auth (DB korisnici; ENV-admin ostaje kao fallback ako ga imaš u kodu/okruženju)
 app.post("/auth/login", async (req, res) => {

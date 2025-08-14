@@ -15,8 +15,6 @@ WORKDIR /app
 ENV NODE_ENV=production
 # >>> KLUČNO za Prisma na Debian/bookworm:
 ENV PRISMA_CLIENT_ENGINE_TYPE=binary
-# (opcionalno, ali može pomoći u nekim setupima)
-ENV PRISMA_CLI_QUERY_ENGINE_TYPE=binary
 
 # OpenSSL runtime za Prisma (libssl3 + certs)
 RUN apt-get update -y \
