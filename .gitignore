@@ -1,3 +1,12 @@
+# SSH keys and sensitive files
+mojkljucek
+mojkljucek.pub
+id_ed25519
+id_ed25519.pub
+*.pem
+*.ppk
+*.key
+.env
 # Node / Next / general
 node_modules/
 .next/
@@ -9,3 +18,11 @@ build/
 .DS_Store
 *.log
 coverage/
+mojkljucek
+mojkljucek.pub
+id_ed25519
+id_ed25519.pub
+*.pem
+*.ppk
+*.key
+.env
