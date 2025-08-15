@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -14,10 +14,42 @@ model Country {
 }
 
 model User {
-  id           Int     @id @default(autoincrement())
-  email        String  @unique
-  passwordHash String
-  role         String
-  countryId    Int?
-  country      Country? @relation(fields: [countryId], references: [id])
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      String   @default("OPERATOR") // OPERATOR | COUNTRY_ADMIN | SUPERADMIN
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  loans     Loan[]
+  Country   Country? @relation(fields: [countryId], references: [id])
+  countryId Int?
+}
+
+model Device {
+  id        String   @id @default(cuid())
+  imei      String?  @unique
+  serial    String?  @unique
+  model     String
+  status    String   @default("APPLIED") // APPLIED, CONTACTED, ISSUED, ON_LOAN, RETURNED, CLOSED
+  country   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  loans Loan[]
+}
+
+model Loan {
+  id         String    @id @default(cuid())
+  deviceId   String
+  userId     String?
+  issuedAt   DateTime?
+  returnedAt DateTime?
+  notes      String?
+
+  device Device @relation(fields: [deviceId], references: [id])
+  user   User?  @relation(fields: [userId], references: [id])
+
+  @@index([deviceId])
+  @@index([userId])
 }
