@@ -52,6 +52,43 @@ async function main() {
     update: {},
     create: { email: "rs.admin@system.local", passwordHash: passwordHashCA, role: "country_admin", countryId: rs.id },
   });
+
+  // --- NOVO: country admin korisnici po zemlji ---
+  const adminPassword = "adminxy123!";
+  const passwordHashAdmins = await bcrypt.hash(adminPassword, 12);
+
+  await prisma.user.upsert({
+    where: { email: "adminhr@mpg.hr" },
+    update: {},
+    create: {
+      email: "adminhr@mpg.hr",
+      passwordHash: passwordHashAdmins,
+      role: "country_admin",
+      countryId: hr.id, // HR
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { email: "adminsi@mpg.si" },
+    update: {},
+    create: {
+      email: "adminsi@mpg.si",
+      passwordHash: passwordHashAdmins,
+      role: "country_admin",
+      countryId: si.id, // SI
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { email: "adminrs@mpg.rs" },
+    update: {},
+    create: {
+      email: "adminrs@mpg.rs",
+      passwordHash: passwordHashAdmins,
+      role: "country_admin",
+      countryId: rs.id, // RS
+    },
+  });
 }
 
 main()

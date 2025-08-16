@@ -32,7 +32,24 @@ export default function Login() {
       if (!r.ok) throw new Error("Bad credentials");
       const data = await r.json();
       window.localStorage.setItem("you_token", data.token);
-      window.location.href = "/dashboard";
+      // --- REDIRECT LOGIKA ---
+      const jwt = JSON.parse(atob(data.token.split('.')[1]));
+      if (jwt.countryId) {
+        // Dohvati code za countryId
+        const cres = await fetch(`${base}/countries`);
+        const countries = await cres.json();
+        const country = countries.find(c => c.id === jwt.countryId);
+        if (country && country.code) {
+          router.replace(`/c/${country.code.toLowerCase()}/dashboard`);
+        } else {
+          router.replace('/dashboard'); // fallback
+        }
+      } else if (jwt.role === 'superadmin' && !jwt.countryId) {
+        router.replace('/select-country');
+      } else {
+        router.replace('/dashboard');
+      }
+      // --- END REDIRECT LOGIKA ---
     } catch (err) {
       alert("Login failed");
     }

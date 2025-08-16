@@ -104,6 +104,19 @@ app.delete("/users/:id", requireAuth, requireRole("superadmin", "country_admin")
   res.json({ success: true });
 });
 
+app.get("/countries", async (req, res) => {
+  try {
+    const countries = await prisma.country.findMany({
+      select: { id: true, code: true },
+      orderBy: { code: "asc" },
+    });
+    res.json(countries);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Failed to fetch countries" });
+  }
+});
+
 const PORT = process.env.PORT || 8080;
 // VAŽNO: slušaj na 0.0.0.0 da Fly proxy može doći do appa
 app.listen(PORT, "0.0.0.0", () => {
