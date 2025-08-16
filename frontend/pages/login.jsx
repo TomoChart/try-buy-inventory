@@ -14,8 +14,7 @@ export default function LoginPage() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Add your login logic here
-    // Example: router.push('/dashboard');
+    router.push('/dashboard');
   };
 
   if (!ready) return null;
