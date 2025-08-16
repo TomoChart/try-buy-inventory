@@ -1,5 +1,7 @@
 // pages/devices/index.jsx
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/router";
+import { useActiveCountryCode } from "../../lib/route";
 import AppLayout from "../../components/AppLayout";
 import { API, getCurrentUser, countryCodeById } from "../../lib/auth";
 
@@ -7,6 +9,8 @@ const PAGE_SIZE = 10;
 
 export default function DevicesPage() {
   const user = getCurrentUser();
+  const router = useRouter();
+  const codeFromPath = useActiveCountryCode(); // npr. /c/hr/devices -> "hr"
 
   const [code, setCode] = useState(null);       // HR/SI/RS
   const [loading, setLoading] = useState(true);
@@ -17,21 +21,24 @@ export default function DevicesPage() {
   const [search, setSearch] = useState("");
 
   // 1) Odredi country code:
+  //    - prioritet: code iz URL-a (ako postoji)
   //    - country_admin: mapiraj iz JWT countryId -> code
   //    - superadmin (nema countryId): pokaži info poruku (odabir zemlje u top baru), pa ne povlači podatke dok code != null
   useEffect(() => {
     (async () => {
-      if (!user) return; // AppLayout će te vratiti na /login
+      if (!user) return; // AppLayout će redirectati na /login
+      if (codeFromPath) {
+        setCode(codeFromPath.toUpperCase());
+        return;
+      }
       if (user.countryId) {
         const c = await countryCodeById(user.countryId);
         setCode((c || "").toUpperCase());
       } else {
-        // superadmin bez zemlje -> čeka da korisnik odabere zemlju u top switcheru (preporuka:
-        // idi na /c/{code}/dashboard pa klikni Uređaji)
-        setCode(null);
+        setCode(null); // superadmin bez odabrane zemlje
       }
     })();
-  }, [user]);
+  }, [user, codeFromPath]);
 
   // 2) Učitaj listu uređaja kad su code/page/search spremni
   useEffect(() => {

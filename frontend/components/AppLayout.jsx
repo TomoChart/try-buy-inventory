@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import CountrySwitcher from "./CountrySwitcher";
 import { getCurrentUser } from "../lib/auth";
+import { useActiveCountryCode } from "../lib/route";
 
 const NavLink = ({ href, active, children }) => (
   <Link
@@ -25,7 +26,10 @@ export default function AppLayout({ children }) {
     return null;
   }
 
+
   const p = router.asPath;
+  const activeCode = useActiveCountryCode();
+  const withCode = (slug) => (activeCode ? `/c/${activeCode}${slug}` : slug);
 
   return (
     <div className="min-h-screen bg-slate-50 grid grid-cols-[240px_1fr]">
@@ -33,16 +37,19 @@ export default function AppLayout({ children }) {
       <aside className="bg-white border-r border-slate-200 p-4">
         <h3 className="text-lg font-semibold mb-4 pl-1">Try-Buy Inventory</h3>
 
+
         <div className="mt-2">
           <div className="text-xs uppercase tracking-wide text-slate-500 mb-2 pl-1">Nodovi</div>
-          <NavLink href="/galaxy-try" active={p.startsWith("/galaxy-try")}>Galaxy Try (Fold7)</NavLink>
-          <NavLink href="/try-and-buy" active={p.startsWith("/try-and-buy")}>Try_and_Buy</NavLink>
-          <NavLink href="/devices" active={p.startsWith("/devices")}>Uređaji</NavLink>
+          <NavLink href={withCode("/dashboard")} active={p.includes("/dashboard")}>Dashboard</NavLink>
+          <NavLink href={withCode("/galaxy-try")} active={p.includes("/galaxy-try")}>Galaxy Try (Fold7)</NavLink>
+          <NavLink href={withCode("/try-and-buy")} active={p.includes("/try-and-buy")}>Try_and_Buy</NavLink>
+          <NavLink href={withCode("/devices")} active={p.includes("/devices")}>Uređaji</NavLink>
         </div>
+
 
         <div className="mt-6">
           <div className="text-xs uppercase tracking-wide text-slate-500 mb-2 pl-1">BTL</div>
-          <NavLink href="/btl" active={p.startsWith("/btl")}>BTL evidencija</NavLink>
+          <NavLink href={withCode("/btl")} active={p.includes("/btl")}>BTL evidencija</NavLink>
         </div>
 
         <div className="mt-6">
