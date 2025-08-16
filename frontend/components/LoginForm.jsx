@@ -1,10 +1,5 @@
 import { useState } from "react";
 import { useRouter } from "next/router";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
-import { Input } from "./ui/input";
-import { Button } from "./ui/button";
-import { Label } from "./ui/label";
-import { Checkbox } from "./ui/checkbox";
 import styles from "../styles/login.module.css";
 import { API, TOKEN_KEY } from "../lib/auth";
 
@@ -28,12 +23,10 @@ export function LoginForm() {
         body: JSON.stringify({ email, password })
       });
       if (!res.ok) throw new Error(`Login failed (${res.status})`);
-      const data = await res.json(); // očekujemo { token }
+      const data = await res.json();
       if (!data?.token) throw new Error("No token");
-      // spremi token (ostajemo na localStorage radi konzistentnosti)
       localStorage.setItem(TOKEN_KEY, data.token);
-      // redirect: neka postojeća logika obavi svoje (ili po želji ovdje)
-      router.replace("/dashboard"); // ako koristiš /c/{code}/dashboard, već imaš post-login redirect
+      router.replace("/dashboard");
     } catch (e) {
       setErr("Pogrešan email ili lozinka.");
     } finally {
@@ -72,59 +65,62 @@ export function LoginForm() {
         <div className="absolute top-0 left-1/2 w-1.5 h-1.5 bg-pink-400 rounded-full opacity-60 animate-[spin_7s_linear_infinite_reverse] origin-[0_160px]" />
       </div>
 
-      <Card className="w-full max-w-md mx-auto backdrop-blur-sm bg-card/95 border-white/20 shadow-2xl relative z-10">
-        <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-2xl">Welcome back</CardTitle>
-          <CardDescription>Enter your credentials to access your account</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {err && <div className="text-sm text-red-600">{err}</div>}
+      <div className="w-full max-w-md mx-auto backdrop-blur-sm bg-white/95 border border-white/20 shadow-2xl relative z-10 rounded-2xl p-8">
+        <div className="space-y-1 text-center mb-6">
+          <div className="text-2xl font-bold">Welcome back</div>
+          <div className="text-slate-500">Enter your credentials to access your account</div>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {err && <div className="text-sm text-red-600">{err}</div>}
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="name@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="bg-input-background/50 border-white/20"
+          <div className="space-y-2">
+            <label htmlFor="email" className="block text-sm font-medium">Email</label>
+            <input
+              id="email"
+              type="email"
+              placeholder="name@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full rounded-lg border border-white/20 bg-slate-50 px-3 py-2"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="password" className="block text-sm font-medium">Password</label>
+            <input
+              id="password"
+              type="password"
+              placeholder="Enter your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full rounded-lg border border-white/20 bg-slate-50 px-3 py-2"
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <input
+                id="remember"
+                type="checkbox"
+                checked={rememberMe}
+                onChange={e => setRememberMe(e.target.checked)}
+                className="rounded border-slate-300"
               />
+              <label htmlFor="remember" className="text-sm">Remember me</label>
             </div>
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="bg-input-background/50 border-white/20"
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Checkbox id="remember" checked={rememberMe} onCheckedChange={(v) => setRememberMe(!!v)} />
-                <Label htmlFor="remember" className="text-sm">Remember me</Label>
-              </div>
-              {/* maknuto: Forgot password */}
-            </div>
-
-            <Button
-              type="submit"
-              disabled={submitting}
-              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-            >
-              {submitting ? "Signing in…" : "Sign in"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-2 mt-2"
+          >
+            {submitting ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
