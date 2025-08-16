@@ -2,7 +2,7 @@
 
 /* Po želji – tvoja default pozadina i font */
 html, body {
-  /* background-color: #f8fafc;  Tailwind's bg-slate-50  */
+  background-color: #f8fafc; /* Tailwind's bg-slate-50 */
   color: #0f172a;            /* Tailwind's text-slate-900 */
 }
 
