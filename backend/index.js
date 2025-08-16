@@ -117,6 +117,92 @@ app.get("/countries", async (req, res) => {
   }
 });
 
+// --- helpers: dohvat zemlje i keš ---
+const countryCache = new Map(); // code -> { id, code }
+async function getCountryByCode(code) {
+  const key = String(code || "").toUpperCase();
+  if (!key) return null;
+  if (countryCache.has(key)) return countryCache.get(key);
+  const c = await prisma.country.findUnique({ where: { code: key } });
+  if (c) countryCache.set(key, c);
+  return c;
+}
+
+// --- MOCK uređaji (dok ne uvedemo Device model) ---
+const demoDevices = [
+  { id: 1, imei: "356789012345671", model: "Galaxy Fold7", status: "active",   location: "Zagreb",   countryCode: "HR", updatedAt: new Date().toISOString() },
+  { id: 2, imei: "356789012345672", model: "Galaxy Fold7", status: "inactive", location: "Split",    countryCode: "HR", updatedAt: new Date().toISOString() },
+  { id: 3, imei: "356789012345673", model: "Galaxy S24",   status: "active",   location: "Ljubljana",countryCode: "SI", updatedAt: new Date().toISOString() },
+  { id: 4, imei: "356789012345674", model: "Galaxy A55",   status: "active",   location: "Maribor",  countryCode: "SI", updatedAt: new Date().toISOString() },
+  { id: 5, imei: "356789012345675", model: "Galaxy Fold7", status: "active",   location: "Beograd",  countryCode: "RS", updatedAt: new Date().toISOString() },
+  { id: 6, imei: "356789012345676", model: "Galaxy S24",   status: "inactive", location: "Novi Sad", countryCode: "RS", updatedAt: new Date().toISOString() },
+  { id: 7, imei: "356789012345677", model: "Galaxy A35",   status: "active",   location: "Zagreb",   countryCode: "HR", updatedAt: new Date().toISOString() },
+  { id: 8, imei: "356789012345678", model: "Galaxy Fold7", status: "active",   location: "Celje",    countryCode: "SI", updatedAt: new Date().toISOString() },
+  { id: 9, imei: "356789012345679", model: "Galaxy S24",   status: "active",   location: "Niš",      countryCode: "RS", updatedAt: new Date().toISOString() },
+  { id:10, imei: "356789012345680", model: "Galaxy A55",   status: "active",   location: "Rijeka",   countryCode: "HR", updatedAt: new Date().toISOString() },
+];
+
+// --- KPI: /stats?code=hr ---
+app.get("/stats", async (req, res) => {
+  try {
+    const code = String(req.query.code || "").toUpperCase();
+    const c = await getCountryByCode(code);
+    if (!c) return res.status(400).json({ error: "Unknown country code" });
+
+    // realni podatak iz DB-a koji već imamo
+    const users = await prisma.user.count({ where: { countryId: c.id } });
+
+    // mock za sada (dok ne uvedemo tablice)
+    const devicesActive = demoDevices.filter(d => d.countryCode === code && d.status === "active").length;
+    const tryAndBuyActive = 0;       // TODO: zamijeniti kad dodamo T&B tablicu
+    const galaxyTryActivations = 0;  // TODO: zamijeniti kad dodamo Galaxy Try evidenciju
+
+    res.json({
+      country: { id: c.id, code: c.code },
+      kpi: {
+        devicesActive,
+        tryAndBuyActive,
+        galaxyTryActivations,
+        users,
+      },
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Failed to load stats" });
+  }
+});
+
+// --- Devices (mock): /devices?code=hr&page=1&pageSize=10&search=fold ---
+app.get("/devices", async (req, res) => {
+  try {
+    const code = String(req.query.code || "").toUpperCase();
+    const c = await getCountryByCode(code);
+    if (!c) return res.status(400).json({ error: "Unknown country code" });
+
+    const page = Math.max(1, parseInt(req.query.page || "1", 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize || "10", 10)));
+    const search = String(req.query.search || "").toLowerCase();
+
+    let rows = demoDevices.filter(d => d.countryCode === code);
+    if (search) {
+      rows = rows.filter(d =>
+        d.imei.toLowerCase().includes(search) ||
+        d.model.toLowerCase().includes(search) ||
+        d.location.toLowerCase().includes(search)
+      );
+    }
+
+    const total = rows.length;
+    const start = (page - 1) * pageSize;
+    const items = rows.slice(start, start + pageSize);
+
+    res.json({ total, page, pageSize, items });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Failed to load devices" });
+  }
+});
+
 const PORT = process.env.PORT || 8080;
 // VAŽNO: slušaj na 0.0.0.0 da Fly proxy može doći do appa
 app.listen(PORT, "0.0.0.0", () => {

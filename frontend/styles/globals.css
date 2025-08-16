@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* If you are not using Tailwind CSS, remove these lines or ensure Tailwind is set up to process this file */
 
 /* Po želji – tvoja default pozadina i font */
 html, body {
