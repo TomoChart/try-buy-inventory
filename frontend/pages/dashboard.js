@@ -1,28 +1,34 @@
+import AppLayout from "../components/AppLayout";
+import { getCurrentUser } from "../lib/auth";
 import { useEffect } from "react";
 import { useRouter } from "next/router";
 
 export default function Dashboard() {
   const router = useRouter();
+  const user = getCurrentUser();
 
   useEffect(() => {
-    // provjera tokena – isti key koji koristi login
-    const t = typeof window !== "undefined" ? localStorage.getItem("you_token") : null;
-    if (!t) router.replace("/login");
-  }, [router]);
+    if (!user) router.replace("/login");
+  }, [user, router]);
+
+  if (!user) return null;
 
   return (
-    <main style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
-      <h1>Dashboard</h1>
-      <p>Login je uspio ✅ (token je u localStorage).</p>
-      <button
-        onClick={() => {
-          localStorage.removeItem("you_token");
-          router.replace("/login");
-        }}
-        style={{ marginTop: 16 }}
-      >
-        Log out
-      </button>
-    </main>
+    <AppLayout>
+      <h1 className="text-2xl font-semibold mb-3">Dashboard</h1>
+      <p className="text-slate-600">Dobrodošli, {user.email}!</p>
+      <div className="mt-6">
+        <button
+          onClick={() => {
+            localStorage.removeItem("you_token");
+            sessionStorage.removeItem("you_token");
+            window.location.href = "/login";
+          }}
+          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
+        >
+          Logout
+        </button>
+      </div>
+    </AppLayout>
   );
 }
