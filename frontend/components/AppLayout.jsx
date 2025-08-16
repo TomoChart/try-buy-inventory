@@ -4,77 +4,71 @@ import { useRouter } from "next/router";
 import CountrySwitcher from "./CountrySwitcher";
 import { getCurrentUser } from "../lib/auth";
 
-const linkStyle = { display: "block", padding: "10px 14px", borderRadius: 8, textDecoration: "none", color: "#111" };
-const activeStyle = { background: "#eef4ff", fontWeight: 600 };
+const NavLink = ({ href, active, children }) => (
+  <Link
+    href={href}
+    className={[
+      "block rounded-xl px-3.5 py-2.5 text-sm font-medium",
+      active ? "bg-indigo-50 text-indigo-700" : "text-slate-800 hover:bg-slate-100"
+    ].join(" ")}
+  >
+    {children}
+  </Link>
+);
 
 export default function AppLayout({ children }) {
   const router = useRouter();
   const user = getCurrentUser();
 
-  // Minimal auth guard
-  if (typeof window !== "undefined" && !user) {
-    if (router.pathname !== "/login") router.replace("/login");
+  if (typeof window !== "undefined" && !user && router.pathname !== "/login") {
+    router.replace("/login");
+    return null;
   }
 
-  const path = router.asPath;
+  const p = router.asPath;
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", minHeight: "100vh", background: "#f7f7fb" }}>
+    <div className="min-h-screen bg-slate-50 grid grid-cols-[240px_1fr]">
       {/* Sidebar */}
-      <aside style={{ background: "#fff", borderRight: "1px solid #eee", padding: 16 }}>
-        <h3 style={{ margin: "8px 0 16px 4px" }}>Try-Buy Inventory</h3>
+      <aside className="bg-white border-r border-slate-200 p-4">
+        <h3 className="text-lg font-semibold mb-4 pl-1">Try-Buy Inventory</h3>
 
-        <div style={{ marginTop: 12 }}>
-          <div style={{ fontSize: 12, color: "#888", margin: "12px 4px" }}>Nodovi</div>
-          <Link href="/c/hr/dashboard" style={{ ...linkStyle, ...(path.includes("/c/") && path.endsWith("/dashboard") ? activeStyle : {}) }}>
-            Dashboard
-          </Link>
-          <Link href="/galaxy-try" style={{ ...linkStyle, ...(path.startsWith("/galaxy-try") ? activeStyle : {}) }}>
-            Galaxy Try (Fold7)
-          </Link>
-          <Link href="/try-and-buy" style={{ ...linkStyle, ...(path.startsWith("/try-and-buy") ? activeStyle : {}) }}>
-            Try_and_Buy
-          </Link>
-          <Link href="/devices" style={{ ...linkStyle, ...(path.startsWith("/devices") ? activeStyle : {}) }}>
-            Uređaji
-          </Link>
+        <div className="mt-2">
+          <div className="text-xs uppercase tracking-wide text-slate-500 mb-2 pl-1">Nodovi</div>
+          <NavLink href="/galaxy-try" active={p.startsWith("/galaxy-try")}>Galaxy Try (Fold7)</NavLink>
+          <NavLink href="/try-and-buy" active={p.startsWith("/try-and-buy")}>Try_and_Buy</NavLink>
+          <NavLink href="/devices" active={p.startsWith("/devices")}>Uređaji</NavLink>
         </div>
 
-        <div style={{ marginTop: 24 }}>
-          <div style={{ fontSize: 12, color: "#888", margin: "12px 4px" }}>BTL</div>
-          <Link href="/btl" style={{ ...linkStyle, ...(path.startsWith("/btl") ? activeStyle : {}) }}>
-            BTL evidencija
-          </Link>
+        <div className="mt-6">
+          <div className="text-xs uppercase tracking-wide text-slate-500 mb-2 pl-1">BTL</div>
+          <NavLink href="/btl" active={p.startsWith("/btl")}>BTL evidencija</NavLink>
         </div>
 
-        <div style={{ marginTop: 24 }}>
-          <div style={{ fontSize: 12, color: "#888", margin: "12px 4px" }}>Admin</div>
-          <Link href="/admin/users" style={{ ...linkStyle, ...(path.startsWith("/admin/users") ? activeStyle : {}) }}>
-            Korisnici
-          </Link>
-          <Link href="/settings" style={{ ...linkStyle, ...(path.startsWith("/settings") ? activeStyle : {}) }}>
-            Postavke
-          </Link>
+        <div className="mt-6">
+          <div className="text-xs uppercase tracking-wide text-slate-500 mb-2 pl-1">Admin</div>
+          <NavLink href="/admin/users" active={p.startsWith("/admin/users")}>Korisnici</NavLink>
+          <NavLink href="/settings" active={p.startsWith("/settings")}>Postavke</NavLink>
         </div>
       </aside>
 
       {/* Main */}
-      <main>
+      <main className="flex flex-col">
         {/* Topbar */}
-        <div style={{ background: "#fff", borderBottom: "1px solid #eee", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontWeight: 600 }}>Try-Buy</div>
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+          <div className="font-semibold">Try-Buy</div>
+          <div className="flex items-center gap-3">
             <CountrySwitcher />
             <button
               onClick={() => { localStorage.removeItem("you_token"); window.location.href = "/login"; }}
-              style={{ padding: "6px 10px", border: "1px solid #ddd", borderRadius: 8, background: "#fafafa" }}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
             >
               Logout
             </button>
           </div>
         </div>
 
-        <div style={{ padding: 20 }}>{children}</div>
+        <div className="p-5">{children}</div>
       </main>
     </div>
   );

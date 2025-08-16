@@ -1,10 +1,10 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* If not using Tailwind's build process, include the compiled Tailwind CSS instead */
+/* Otherwise, ensure your build tool (like PostCSS) is set up to process @tailwind directives */
 
 /* Po želji – tvoja default pozadina i font */
 html, body {
-  @apply bg-slate-50 text-slate-900;
+  background-color: #f8fafc; /* Tailwind's bg-slate-50 */
+  color: #0f172a;            /* Tailwind's text-slate-900 */
 }
 
 .sidebar {

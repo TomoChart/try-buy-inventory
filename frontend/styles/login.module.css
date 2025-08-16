@@ -1,0 +1,16 @@
+@keyframes shimmer {
+  0%, 100% { opacity: .4; transform: translateX(-10px); }
+  50% { opacity: .8; transform: translateX(10px); }
+}
+@keyframes glow {
+  0%, 100% { opacity: .4; transform: scale(.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* pomoćne klase ako zatrebaju */
+.frame { position: relative; }
+.pointerNone { pointer-events: none; }
