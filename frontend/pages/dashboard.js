@@ -1,33 +1,28 @@
-import withAuth from "../components/withAuth";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useRouter } from "next/router";
 
-function Dashboard() {
-  const [api, setApi] = useState("…");
+export default function Dashboard() {
+  const router = useRouter();
 
   useEffect(() => {
-    const base = process.env.NEXT_PUBLIC_BACKEND_URL;
-    const token = localStorage.getItem("you_token");
-    fetch(`${base}/devices?country=HR`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(r => r.json())
-      .then(j => setApi(JSON.stringify(j)))
-      .catch(() => setApi("API unreachable"));
-  }, []);
+    // provjera tokena – isti key koji koristi login
+    const t = typeof window !== "undefined" ? localStorage.getItem("you_token") : null;
+    if (!t) router.replace("/login");
+  }, [router]);
 
   return (
-    <main style={{ padding: 24 }}>
-      <h1>Dashboard – logged in ✅</h1>
-      <p>Backend ping: {api}</p>
+    <main style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
+      <h1>Dashboard</h1>
+      <p>Login je uspio ✅ (token je u localStorage).</p>
       <button
         onClick={() => {
           localStorage.removeItem("you_token");
-          window.location.href = "/login";
+          router.replace("/login");
         }}
+        style={{ marginTop: 16 }}
       >
-        Sign out
+        Log out
       </button>
     </main>
   );
 }
-export default withAuth(Dashboard);
