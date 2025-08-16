@@ -1,5 +1,6 @@
-/* If not using Tailwind's build process, include the compiled Tailwind CSS instead */
-/* Otherwise, ensure your build tool (like PostCSS) is set up to process @tailwind directives */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 /* Po želji – tvoja default pozadina i font */
 html, body {
