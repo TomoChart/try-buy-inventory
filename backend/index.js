@@ -18,6 +18,7 @@ const allowed = process.env.CORS_ORIGINS
 
 app.use(cors({
   origin: function (origin, cb) {
+    console.log('CORS_ORIGINS:', allowed, 'Origin:', origin);
     // dopusti zahtjeve bez Origin (npr. curl/healthz) i one s dopuštene domene
     if (!origin || allowed.includes(origin)) return cb(null, true);
     return cb(new Error('CORS not allowed'), false);
