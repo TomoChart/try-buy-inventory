@@ -11,9 +11,6 @@ on:
         description: 'Nova lozinka'
         required: true
         default: 'superuser!123'
-  push:
-    paths:
-      - '.github/workflows/reset-user.yml'
 
 jobs:
   reset:
@@ -40,11 +37,12 @@ jobs:
         env:
           EMAIL: ${{ inputs.email }}
           HASH: ${{ steps.makehash.outputs.hash }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          PGSSLMODE: require
         run: |
           set -euo pipefail
-          # :’VAR’ je psql literal – sigurno ubacuje vrijednost i pravilno escap-a $
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+          psql -d "$DATABASE_URL" -v ON_ERROR_STOP=1 \
             -v EMAIL="$EMAIL" -v HASH="$HASH" \
             -c 'UPDATE "User" SET "passwordHash" = :'HASH' WHERE email = :'EMAIL';'
-          psql "$DATABASE_URL" -v EMAIL="$EMAIL" \
+          psql -d "$DATABASE_URL" -v EMAIL="$EMAIL" \
             -c 'SELECT email FROM "User" WHERE email = :'EMAIL';'
