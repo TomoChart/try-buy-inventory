@@ -9,7 +9,7 @@ const { PrismaClient } = require('@prisma/client');
 dotenv.config();
 
 const app = express();
-
+app.use(express.json());
 
 // CORS: dinamički origin i preflight
 const allowed = process.env.CORS_ORIGINS
@@ -28,7 +28,6 @@ app.use(cors({
 }));
 // preflight za sve rute
 app.options('*', cors());
-app.use(express.json());
 
 const prisma = new PrismaClient();
 
@@ -71,23 +70,34 @@ app.get('/healthz', (req, res) => {
   res.status(200).send({ status: 'healthy' });
 });
 
-// Auth (DB korisnici; ENV-admin ostaje kao fallback ako ga imaš u kodu/okruženju)
-app.post("/auth/login", async (req, res) => {
-  const { email, password } = req.body || {};
-  if (!email || !password) return res.status(400).json({ error: "Email and password required" });
 
-  // ispravno — traži po emailu i čuvaj se nul vrijednosti
-  const user = await prisma.user.findFirst({ where: { email } });
+// Novi sigurni blok za login
+app.post('/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password required' });
+    }
 
-  if (!user || !user.passwordHash) {
-    return res.status(401).json({ error: 'Invalid credentials' });
+    // dohvat korisnika po emailu (ne po id-u)
+    const user = await prisma.user.findFirst({ where: { email } });
+    if (!user || !user.passwordHash) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // usporedba lozinke
+    const ok = await bcrypt.compare(String(password), String(user.passwordHash));
+    if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+
+    // JWT payload
+    const payload = { id: user.id, email: user.email, role: user.role, countryId: user.countryId };
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    return res.json({ token });
+  } catch (e) {
+    console.error('LOGIN_ERROR', e);
+    return res.status(500).json({ error: 'Login failed' });
   }
-
-  const ok = await bcrypt.compare(password, user.passwordHash);
-  if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
-
-  const token = signToken(user);
-  return res.json({ token, role: user.role, countryId: user.countryId ?? null });
 });
 
 // Users CRUD (RBAC: superadmin i country_admin)
