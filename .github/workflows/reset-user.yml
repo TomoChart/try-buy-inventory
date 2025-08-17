@@ -21,36 +21,29 @@ jobs:
         run: npm install bcryptjs@2.x --no-audit --no-fund
 
       - name: Hash password & update user in DB
-        run: |
-          # 1) generiraj bcrypt hash lokalno u actionu (nema ESM glavobolje)
-          npm init -y >/dev/null 2>&1
-          npm i bcryptjs >/dev/null 2>&1
-          HASH=$(node -e "const b=require('bcryptjs'); console.log(b.hashSync(process.env.PW, 12));" )
-          echo "Generated hash length: $(printf "%s" "$HASH" | wc -c)"
-
-          # 2) sigurno upiši u Postgres (single-quoted heredoc sprječava ekspanziju $)
-          psql "${{ env.PG_URL }}" <<'SQL'
-          DO $do$
-          DECLARE
-            v_email text := '${{ github.event.inputs.email }}';
-            v_hash  text := 'REPLACE_ME';
-          BEGIN
-            UPDATE "User"
-               SET "passwordHash" = v_hash,
-                   "updatedAt" = NOW()
-             WHERE email = v_email;
-          END $do$;
-          SQL
-
-          # 3) zamijeni REPLACE_ME točnim hashom bez da shell dira $ znakove
-          #    (psql je već izvršen; gornji DO blok je samo “template” – umjesto DO koristi ovaj direktni UPDATE):
-          psql "${{ env.PG_URL }}" -c "UPDATE \"User\" SET \"passwordHash\"='$(printf %s \"$HASH\" | sed "s/'/''/g")', \"updatedAt\"=NOW() WHERE email='${{ github.event.inputs.email }}';"
-
-          # 4) pokaži prva 3 znaka hasha radi provjere (bez iznošenja cijelog hasha)
-          echo "Hash prefix: $(printf '%s' \"$HASH\" | cut -c1-7)"
         env:
+          EMAIL: ${{ github.event.inputs.email }}
+          PW:    ${{ github.event.inputs.password }}
+        run: |
+          # 1) generiraj bcrypt hash lokalno u actionu
+          HASH=$(node -e "const b=require('bcryptjs'); console.log(b.hashSync(process.env.PW, 12));")
+          echo "Generated hash length: $(printf '%s' "$HASH" | wc -c)"
+
+          # 2) siguran UPDATE – psql varijable i :'var' quoting (sačuva $ i sve znakove)
+          psql "$PG_URL" -v ON_ERROR_STOP=1 \
+            -v email="$EMAIL" -v hash="$HASH" \
+            -c 'UPDATE "User" SET "passwordHash" = :'hash', "updatedAt" = NOW() WHERE email = :'email';'
+
+      - name: Verify hash from DB
+        env:
+          EMAIL: ${{ github.event.inputs.email }}
           PW: ${{ github.event.inputs.password }}
-          PGPASSWORD: ${{ secrets.PG_PASS }}
+        run: |
+          DB_HASH=$(psql "$PG_URL" -Atc "SELECT \"passwordHash\" FROM \"User\" WHERE email='${EMAIL}';")
+          echo "DB hash prefix: $(printf '%s' "$DB_HASH" | cut -c1-7)"
+          node -e "const b=require('bcryptjs'); b.compare(process.env.PW, process.env.DB_HASH).then(ok=>{console.log('BCRYPT_MATCH=',ok); if(!ok) process.exit(1);});"
+        env:
+          DB_HASH: ${{ env.DB_HASH }}
 
 
       - name: Read hash from DB (mask safely)
