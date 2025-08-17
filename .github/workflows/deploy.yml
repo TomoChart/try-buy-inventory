@@ -58,3 +58,22 @@ jobs:
             pm2 start index.js --name \"$PM2_APP\" --time --node-args=\"--env-file=.env\" || pm2 reload \"$PM2_APP\"
             pm2 save
           '"
+
+      - name: Healthcheck backend (localhost)
+        run: |
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" << 'EOF'
+          set -e
+          echo "Probing http://127.0.0.1:8080/healthz ..."
+          for i in {1..20}; do
+            RESP=$(curl -fsS -m 2 http://127.0.0.1:8080/healthz || true)
+            if echo "$RESP" | grep -q healthy; then
+              echo "OK: $RESP"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Healthcheck FAILED. PM2 status i zadnji logovi:"
+          pm2 status || true
+          pm2 logs trybuy-api --lines 80 || true
+          exit 1
+          EOF
