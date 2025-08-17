@@ -1,28 +1,33 @@
-import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
-import jwt from "jsonwebtoken";
-import bcrypt from "bcryptjs";
-import { PrismaClient } from "@prisma/client";
+
+const express = require('express');
+const cors = require('cors');
+const dotenv = require('dotenv');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const { PrismaClient } = require('@prisma/client');
 
 dotenv.config();
 
 const app = express();
 
-// CORS: čita iz CORS_ORIGINS (CSV). Ako nije postavljeno, koristi prod domenu.
-const allowedOrigins = (process.env.CORS_ORIGINS || "https://try-buy-inventory.vercel.app")
-  .split(",")
-  .map(s => s.trim());
+
+// CORS: dinamički origin i preflight
+const allowed = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
+  : [];
 
 app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl, etc.)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error('Not allowed by CORS'), false);
+  origin: function (origin, cb) {
+    // dopusti zahtjeve bez Origin (npr. curl/healthz) i one s dopuštene domene
+    if (!origin || allowed.includes(origin)) return cb(null, true);
+    return cb(new Error('CORS not allowed'), false);
   },
-  credentials: true
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization'],
+  credentials: false
 }));
+// preflight za sve rute
+app.options('*', cors());
 app.use(express.json());
 
 const prisma = new PrismaClient();
@@ -71,11 +76,15 @@ app.post("/auth/login", async (req, res) => {
   const { email, password } = req.body || {};
   if (!email || !password) return res.status(400).json({ error: "Email and password required" });
 
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) return res.status(401).json({ error: "Invalid credentials" });
+  // ispravno — traži po emailu i čuvaj se nul vrijednosti
+  const user = await prisma.user.findFirst({ where: { email } });
+
+  if (!user || !user.passwordHash) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
 
   const ok = await bcrypt.compare(password, user.passwordHash);
-  if (!ok) return res.status(401).json({ error: "Invalid credentials" });
+  if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
 
   const token = signToken(user);
   return res.json({ token, role: user.role, countryId: user.countryId ?? null });
