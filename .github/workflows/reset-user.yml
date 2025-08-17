@@ -25,9 +25,6 @@ jobs:
       - name: (Optional) checkout
         uses: actions/checkout@v4
 
-      - name: Install bcryptjs
-        run: npm i -g bcryptjs
-
       - name: Make bcrypt hash
         id: makehash
         shell: bash
@@ -35,7 +32,7 @@ jobs:
           PASS: ${{ inputs.password }}
         run: |
           set -euo pipefail
-          HASH=$(node -e "import('bcryptjs').then(m=>m.hash(process.env.PASS,12).then(h=>console.log(h)))")
+          HASH=$(npx -y bcryptjs-cli hash "$PASS" 12)
           echo "hash=$HASH" >> "$GITHUB_OUTPUT"
 
       - name: Update passwordHash in Postgres
