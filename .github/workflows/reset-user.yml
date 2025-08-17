@@ -11,13 +11,16 @@ on:
         description: 'Nova lozinka'
         required: true
         default: 'superuser!123'
+  push:
+    paths:
+      - '.github/workflows/reset-user.yml'
 
 jobs:
   reset:
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}   # puna PG konekcija s ?sslmode=require
-
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # ...ostale varijable...
     steps:
       - name: (Optional) checkout
         uses: actions/checkout@v4
@@ -41,6 +44,7 @@ jobs:
           PGSSLMODE: require
         run: |
           set -euo pipefail
+          echo "DATABASE_URL=$DATABASE_URL"
           psql -d "$DATABASE_URL" -v ON_ERROR_STOP=1 \
             -v EMAIL="$EMAIL" -v HASH="$HASH" \
             -c 'UPDATE "User" SET "passwordHash" = :'HASH' WHERE email = :'EMAIL';'
