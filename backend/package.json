@@ -3,11 +3,10 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "prisma": { "seed": "node prisma/seed.js" },
   "scripts": {
-    "start": "node index.js",
-    "prisma:migrate": "prisma migrate deploy",
     "prisma:generate": "prisma generate",
-    "seed": "node prisma/seed.js"
+    "prisma:seed": "prisma db seed"
   },
   "dependencies": {
     "@flydotio/litestream": "^1.0.1",
