@@ -1,3 +1,27 @@
+// DEV ONLY: /auth/dev-login -> vrati token bez baze
+router.post('/auth/dev-login', (req, res) => {
+  const rawEmail = String(req.body?.email || '').trim();
+  const password = String(req.body?.password || '').trim();
+
+  // sigurnosna brava: radi samo kad je DEV_LOGIN_BYPASS=true
+  const devOn = String(process.env.DEV_LOGIN_BYPASS || '').toLowerCase() === 'true';
+  if (!devOn) return res.status(403).json({ error: 'Dev login disabled' });
+
+  // koristi .env admin kredencijale da spriječimo random ulaze
+  const envEmail = String(process.env.ADMIN_EMAIL || '').trim();
+  const envPass  = String(process.env.ADMIN_PASSWORD || '').trim();
+  if (rawEmail.toLowerCase() !== envEmail.toLowerCase() || password !== envPass) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+
+  const jwt = require('jsonwebtoken');
+  const token = jwt.sign(
+    { email: rawEmail, role: 'superadmin', countryId: null },
+    process.env.JWT_SECRET || 'dev_secret_change_me',
+    { expiresIn: '12h' }
+  );
+  res.json({ token, dev: true });
+});
 // backend/routes/auth.js
 const express = require('express');
 const bcrypt = require('bcryptjs');
