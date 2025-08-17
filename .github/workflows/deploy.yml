@@ -62,18 +62,25 @@ jobs:
       - name: Healthcheck backend (localhost)
         run: |
           ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" << 'EOF'
-          set -e
+          set -euo pipefail
+          # učitaj profile (PATH), pa nvm i Node
+          [ -f ~/.bashrc ] && . ~/.bashrc || true
+          [ -f ~/.profile ] && . ~/.profile || true
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" || true
+          nvm use --lts >/dev/null 2>&1 || true
+
           echo "Probing http://127.0.0.1:8080/healthz ..."
           for i in {1..20}; do
-            RESP=$(curl -fsS -m 2 http://127.0.0.1:8080/healthz || true)
-            if echo "$RESP" | grep -q healthy; then
-              echo "OK: $RESP"
+            if curl -fsS -m 2 http://127.0.0.1:8080/healthz | grep -q healthy; then
+              echo "OK: backend is up"
               exit 0
             fi
             sleep 1
           done
-          echo "Healthcheck FAILED. PM2 status i zadnji logovi:"
-          pm2 status || true
-          pm2 logs trybuy-api --lines 80 || true
+
+          echo "Healthcheck FAILED — dumping PM2 status and last logs"
+          command -v pm2 >/dev/null 2>&1 && pm2 status || echo "pm2 not found"
+          command -v pm2 >/dev/null 2>&1 && pm2 logs "$PM2_APP" --lines 120 || true
           exit 1
           EOF
