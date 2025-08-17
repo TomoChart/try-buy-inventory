@@ -152,12 +152,16 @@ export default function LoginForm() {
 					{submitting ? "Prijava..." : "Prijavi se"}
 				</button>
 			</form>
-			<div className="mt-4 text-right">
-				<button className="text-sm text-blue-600 hover:underline" onClick={() => setShowReset(true)}>
-					Zaboravljena lozinka?
-				</button>
-			</div>
-			{showReset && <DevResetModal onClose={() => setShowReset(false)} />}
+			   <div className="mt-6 flex justify-center">
+				   <button
+					   className="text-sm text-white font-semibold hover:text-pink-200 transition-colors duration-150 underline underline-offset-4"
+					   onClick={() => setShowReset(true)}
+					   type="button"
+				   >
+					   Zaboravljena lozinka?
+				   </button>
+			   </div>
+			   {showReset && <DevResetModal onClose={() => setShowReset(false)} />}
 		</div>
 	);
 }
