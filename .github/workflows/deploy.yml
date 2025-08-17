@@ -3,6 +3,7 @@ name: deploy-backend
 on:
   push:
     paths:
+      - 'backend/**'
       - '.github/workflows/deploy.yml'
   workflow_dispatch: {}
 
