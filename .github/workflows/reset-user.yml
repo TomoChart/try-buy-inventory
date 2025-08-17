@@ -45,8 +45,5 @@ jobs:
         run: |
           set -euo pipefail
           echo "DATABASE_URL=$DATABASE_URL"
-          psql -d "$DATABASE_URL" -v ON_ERROR_STOP=1 \
-            -v EMAIL="$EMAIL" -v HASH="$HASH" \
-            -c 'UPDATE "User" SET "passwordHash" = :'HASH' WHERE email = :'EMAIL';'
-          psql -d "$DATABASE_URL" -v EMAIL="$EMAIL" \
-            -c 'SELECT email FROM "User" WHERE email = :'EMAIL';'
+          psql "$DATABASE_URL" -c "UPDATE \"User\" SET \"passwordHash\" = '$HASH' WHERE email = '$EMAIL';"
+          psql "$DATABASE_URL" -c "SELECT email FROM \"User\" WHERE email = '$EMAIL';"
