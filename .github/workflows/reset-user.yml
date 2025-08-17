@@ -4,61 +4,47 @@ on:
   workflow_dispatch:
     inputs:
       email:
-        description: "Email korisnika (npr. t.martinovic@mpg.hr)"
+        description: "User email to reset"
         required: true
+        type: string
       password:
-        description: "Nova lozinka"
+        description: "New password (will be bcrypt hashed)"
         required: true
+        type: string
 
 jobs:
   reset:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}   # puna PG konekcija s ?sslmode=require
+
     steps:
-      - name: Checkout (nije nužno, ali ok)
+      - name: (Optional) checkout
         uses: actions/checkout@v4
 
       - name: Install bcryptjs
-        run: npm install bcryptjs@2.x --no-audit --no-fund
+        run: npm i -g bcryptjs
 
-      - name: Hash password & update user in DB
+      - name: Make bcrypt hash
+        id: makehash
+        shell: bash
         env:
-          EMAIL: ${{ github.event.inputs.email }}
-          PW:    ${{ github.event.inputs.password }}
+          PASS: ${{ inputs.password }}
         run: |
-          # 1) generiraj bcrypt hash lokalno u actionu
-          HASH=$(node -e "const b=require('bcryptjs'); console.log(b.hashSync(process.env.PW, 12));")
-          echo "Generated hash length: $(printf '%s' "$HASH" | wc -c)"
+          set -euo pipefail
+          HASH=$(node -e "import('bcryptjs').then(m=>m.hash(process.env.PASS,12).then(h=>console.log(h)))")
+          echo "hash=$HASH" >> "$GITHUB_OUTPUT"
 
-          # 2) siguran UPDATE – psql varijable i :'var' quoting (sačuva $ i sve znakove)
-          psql "$PG_URL" -v ON_ERROR_STOP=1 \
-            -v email="$EMAIL" -v hash="$HASH" \
-            -c 'UPDATE "User" SET "passwordHash" = :'hash', "updatedAt" = NOW() WHERE email = :'email';'
-
-      - name: Verify hash from DB
+      - name: Update passwordHash in Postgres
+        shell: bash
         env:
-          EMAIL: ${{ github.event.inputs.email }}
-          PW: ${{ github.event.inputs.password }}
+          EMAIL: ${{ inputs.email }}
+          HASH: ${{ steps.makehash.outputs.hash }}
         run: |
-          DB_HASH=$(psql "$PG_URL" -Atc "SELECT \"passwordHash\" FROM \"User\" WHERE email='${EMAIL}';")
-          echo "DB hash prefix: $(printf '%s' "$DB_HASH" | cut -c1-7)"
-          node -e "const b=require('bcryptjs'); b.compare(process.env.PW, process.env.DB_HASH).then(ok=>{console.log('BCRYPT_MATCH=',ok); if(!ok) process.exit(1);});"
-        env:
-          DB_HASH: ${{ env.DB_HASH }}
-
-
-      - name: Read hash from DB (mask safely)
-        run: |
-          H=$(psql "${{ env.PG_URL }}" -Atc "SELECT \"passwordHash\" FROM \"User\" WHERE email='${{ github.event.inputs.email }}';")
-          echo "HASH_LEN=$(printf '%s' "$H" | wc -c)" >> $GITHUB_OUTPUT
-          echo "HASH_PREFIX=$(printf '%s' "$H" | cut -c1-7)" >> $GITHUB_OUTPUT
-          echo "DB_HASH=$H" >> $GITHUB_ENV
-        env:
-          PGPASSWORD: ${{ secrets.PG_PASS }}
-
-      - name: Check bcrypt compare on VPS
-        run: |
-          npm init -y >/dev/null 2>&1
-          npm i bcryptjs >/dev/null 2>&1
-          node -e "const b=require('bcryptjs');const pw='${{ github.event.inputs.password }}';const h=process.env.DB_HASH; b.compare(pw,h).then(ok=>{console.log('BCRYPT_MATCH=',ok); if(!ok) process.exit(2);});"
-        env:
-          DB_HASH: ${{ env.DB_HASH }}
+          set -euo pipefail
+          # :’VAR’ je psql literal – sigurno ubacuje vrijednost i pravilno escap-a $
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -v EMAIL="$EMAIL" -v HASH="$HASH" \
+            -c 'UPDATE "User" SET "passwordHash" = :'HASH' WHERE email = :'EMAIL';'
+          psql "$DATABASE_URL" -v EMAIL="$EMAIL" \
+            -c 'SELECT email FROM "User" WHERE email = :'EMAIL';'
