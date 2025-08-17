@@ -4,13 +4,16 @@ on:
   workflow_dispatch:
     inputs:
       email:
-        description: "User email to reset"
+        description: 'Email korisnika za reset'
         required: true
-        type: string
+        default: 't.martinovic@mpg.hr'
       password:
-        description: "New password (will be bcrypt hashed)"
+        description: 'Nova lozinka'
         required: true
-        type: string
+        default: 'superuser!123'
+  push:
+    paths:
+      - '.github/workflows/reset-user.yml'
 
 jobs:
   reset:
