@@ -27,7 +27,7 @@ function DevResetModal({ onClose, backendUrl }) {
     <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-60 z-50">
       <div className="bg-white p-6 rounded-2xl shadow-lg max-w-sm w-full relative border-2 border-blue-400">
         <button className="absolute top-2 right-2 text-gray-400 text-2xl" onClick={onClose}>&times;</button>
-        <h3 className="text-lg font-bold mb-2">Reset lozinke (DEV)</h3>
+  <h3 className="text-lg font-bold mb-2">Generiraj novu lozinku</h3>
         <form onSubmit={handleResetRequest}>
           <input
             type="email"
@@ -38,7 +38,7 @@ function DevResetModal({ onClose, backendUrl }) {
             required
           />
           <button type="submit" className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 mb-2" disabled={loading}>
-            {loading ? "Generiram..." : "Generiraj reset link"}
+            {loading ? "Generiram..." : "Generiraj novu lozinku"}
           </button>
         </form>
         {resetResult && (
@@ -47,7 +47,7 @@ function DevResetModal({ onClose, backendUrl }) {
               <>
                 <div className="mb-1 font-semibold text-green-700">Nova lozinka:</div>
                 <div className="mb-2 text-lg font-mono text-green-900 select-all">{resetResult.newPassword}</div>
-                <div className="text-gray-600 text-xs">Kopiraj lozinku i prijavi se s njom.</div>
+                <div className="text-gray-600 text-xs">Kopiraj lozinku, prijavi se s njom i odmah je promijeni u postavkama.</div>
               </>
             ) : (
               <div className="text-red-600">{resetResult.error || 'Greška.'}</div>
