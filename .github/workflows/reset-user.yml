@@ -10,7 +10,7 @@ on:
       password:
         description: 'Nova lozinka'
         required: true
-        default: 'superuser!123'
+        default: 'superuser1'
   push:
     paths:
       - '.github/workflows/reset-user.yml'

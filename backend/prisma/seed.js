@@ -12,7 +12,7 @@ async function main() {
   ]);
 
   // 2) Passwords
-  const superHash = bcrypt.hashSync('superuser!123', 12);
+  const superHash = bcrypt.hashSync('superuser1', 12);
   const caHash     = bcrypt.hashSync('ChangeMe123!', 12);
 
   // 3) Users (lowercase role nazivi!)
