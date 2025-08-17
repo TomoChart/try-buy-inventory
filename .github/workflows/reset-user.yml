@@ -43,3 +43,21 @@ jobs:
           EOSQL
           )
           echo "$SQL" | psql "$PG_URL"
+
+
+      - name: Read hash from DB (mask safely)
+        run: |
+          H=$(psql "${{ env.PG_URL }}" -Atc "SELECT \"passwordHash\" FROM \"User\" WHERE email='${{ github.event.inputs.email }}';")
+          echo "HASH_LEN=$(printf '%s' "$H" | wc -c)" >> $GITHUB_OUTPUT
+          echo "HASH_PREFIX=$(printf '%s' "$H" | cut -c1-7)" >> $GITHUB_OUTPUT
+          echo "DB_HASH=$H" >> $GITHUB_ENV
+        env:
+          PGPASSWORD: ${{ secrets.PG_PASS }}
+
+      - name: Check bcrypt compare on VPS
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm i bcryptjs >/dev/null 2>&1
+          node -e "const b=require('bcryptjs');const pw='${{ github.event.inputs.password }}';const h=process.env.DB_HASH; b.compare(pw,h).then(ok=>{console.log('BCRYPT_MATCH=',ok); if(!ok) process.exit(2);});"
+        env:
+          DB_HASH: ${{ env.DB_HASH }}
