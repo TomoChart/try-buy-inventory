@@ -89,3 +89,30 @@ router.post('/auth/login', async (req, res) => {
 });
 
 module.exports = router;
+
+// --- DEV RESET PASSWORD FLOW ---
+// 1. Generiraj reset token (prikazuje se na ekranu, ne šalje email)
+router.post('/auth/dev-reset-request', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+  const user = await prisma.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const token = jwt.sign({ userId: user.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '15m' });
+  res.json({ resetToken: token, resetUrl: `/reset-password?token=${token}` });
+});
+
+// 2. Reset lozinke pomoću tokena
+router.post('/auth/dev-reset-password', async (req, res) => {
+  const { token, newPassword } = req.body;
+  if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password required' });
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await prisma.user.findUnique({ where: { id: payload.userId } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const hashed = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({ where: { id: user.id }, data: { passwordHash: hashed } });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(400).json({ error: 'Invalid or expired token' });
+  }
+});

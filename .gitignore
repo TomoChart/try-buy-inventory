@@ -29,3 +29,4 @@ id_ed25519.pub
 backend/prisma_backup_sqlite/
 backend/list-users.js
 helpich.txt
+.vscode
