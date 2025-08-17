@@ -1,16 +1,67 @@
+// backend/routes/auth.js
 const express = require('express');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { PrismaClient } = require('@prisma/client');
+
 const router = express.Router();
+const prisma = new PrismaClient();
 
-router.post('/invite', (req, res) => {
-  res.send('Invite user');
-});
+function normRole(r) {
+  return String(r || '').toLowerCase(); // 'superadmin' | 'country_admin' | sl.
+}
 
-router.post('/login', (req, res) => {
-  res.send('Login user');
-});
+// DEV bypass (samo za razvoj; isključi u produkciji)
+const DEV_BYPASS_ON =
+  process.env.DEV_LOGIN_BYPASS === 'true' &&
+  process.env.ADMIN_EMAIL &&
+  process.env.ADMIN_PASSWORD &&
+  process.env.JWT_SECRET;
 
-router.post('/reset', (req, res) => {
-  res.send('Reset password');
+router.post('/auth/login', async (req, res) => {
+  try {
+    const rawEmail = String(req.body?.email || '').trim();
+    const password = String(req.body?.password || '');
+
+    // 0) Dev backdoor — vraća token bez DB-a ako je enable-an
+    if (DEV_BYPASS_ON &&
+        rawEmail.toLowerCase() === String(process.env.ADMIN_EMAIL).toLowerCase() &&
+        password === process.env.ADMIN_PASSWORD) {
+      const token = jwt.sign(
+        { email: rawEmail, role: 'superadmin', countryId: null },
+        process.env.JWT_SECRET,
+        { expiresIn: '12h' }
+      );
+      return res.json({ token });
+    }
+
+    // 1) Case-insensitive lookup (Prisma)
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: rawEmail, mode: 'insensitive' } },
+      select: { id: true, email: true, passwordHash: true, role: true, countryId: true },
+    });
+
+    if (!user || !user.passwordHash) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // 2) Bcrypt compare
+    const ok = await bcrypt.compare(password, user.passwordHash);
+    if (!ok) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // 3) JWT
+    const token = jwt.sign(
+      { sub: user.id, email: user.email, role: normRole(user.role), countryId: user.countryId ?? null },
+      process.env.JWT_SECRET,
+      { expiresIn: '12h' }
+    );
+    return res.json({ token });
+  } catch (err) {
+    console.error('Auth error:', err);
+    return res.status(500).json({ error: 'Auth error' });
+  }
 });
 
 module.exports = router;
