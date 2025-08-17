@@ -1,0 +1,45 @@
+name: reset-user
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: "Email korisnika (npr. t.martinovic@mpg.hr)"
+        required: true
+      password:
+        description: "Nova lozinka"
+        required: true
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (nije nužno, ali ok)
+        uses: actions/checkout@v4
+
+      - name: Install bcryptjs
+        run: npm install bcryptjs@2.x --no-audit --no-fund
+
+      - name: Compute bcrypt hash
+        id: h
+        run: |
+          node -e "const b=require('bcryptjs');b.hash(process.env.PASS,12).then(h=>{console.log(h)})" > hash.txt
+          echo "hash=$(cat hash.txt)" >> $GITHUB_OUTPUT
+        env:
+          PASS: ${{ github.event.inputs.password }}
+
+      - name: Upsert user in Postgres
+        env:
+          PG_URL: ${{ secrets.PG_URL }}
+          EMAIL:  ${{ github.event.inputs.email }}
+          HASH:   ${{ steps.h.outputs.hash }}
+        run: |
+          # ako je email UNIQUE u tablici, ovo će ili kreirati ili resetirati lozinku
+          SQL=$(cat <<'EOSQL'
+          INSERT INTO "User"(email, role, "passwordHash")
+          VALUES ($$'"$EMAIL"'$$, 'superadmin', $$'"$HASH"'$$)
+          ON CONFLICT (email) DO UPDATE
+          SET "passwordHash" = EXCLUDED."passwordHash";
+          EOSQL
+          )
+          echo "$SQL" | psql "$PG_URL"

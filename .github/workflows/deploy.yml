@@ -1,30 +1,26 @@
-name: Deploy Backend to VPS
+name: deploy-backend
 
 on:
   push:
-    branches: [ main ]          # promijeni ako deployaš drugi branch
-    paths:
-      - "backend/**"
-      - ".github/workflows/deploy.yml"
-  workflow_dispatch: {}         # ručno pokretanje iz Actions taba
+    branches: [ main ]
+  workflow_dispatch: {}
 
 env:
   SSH_HOST: ${{ secrets.SSH_HOST }}
   SSH_USER: ${{ secrets.SSH_USER }}
-  SSH_PORT: ${{ secrets.SSH_PORT }}
+  SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
   DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
-  PM2_APP: ${{ secrets.PM2_APP }}
+  PM2_APP:   ${{ secrets.PM2_APP }}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Start SSH agent with private key
+      - name: Start SSH agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -32,55 +28,66 @@ jobs:
       - name: Trust VPS host key
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
+          ssh-keyscan -p "${SSH_PORT}" "${SSH_HOST}" >> ~/.ssh/known_hosts
 
-      - name: Rsync backend to VPS (keep .env on server)
+      - name: Rsync backend to VPS (preserve .env on server)
         run: |
           rsync -az --delete \
-            --exclude ".env" \
-            --exclude "node_modules" \
-            ./backend/ "$SSH_USER@$SSH_HOST:$DEPLOY_PATH/"
+            --exclude '.env' \
+            --exclude 'node_modules' \
+            --exclude '.git' \
+            backend/ "${SSH_USER}@${SSH_HOST}:${DEPLOY_PATH}/"
 
-      - name: Install deps, Prisma, PM2 reload on VPS
+      # (OPCIJSKI) Ako želiš .env držati kao secret u GitHubu (multiline):
+      # - name: Write .env on server
+      #   if: ${{ secrets.BACKEND_ENV_FILE != '' }}
+      #   run: |
+      #     ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" 'bash -lc "
+      #       cat > '"${DEPLOY_PATH}"'/.env <<'"'EOF'"'
+      #       ${{ secrets.BACKEND_ENV_FILE }}
+      #       EOF
+      #     "'
+
+      - name: Install Node, deps and (re)start PM2 on VPS
         run: |
-          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "bash -lc '
-            set -e
-            export NVM_DIR=\"$HOME/.nvm\"
-            [ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\"
-            cd \"$DEPLOY_PATH\"
-            node -v && npm -v || true
-            command -v pm2 >/dev/null 2>&1 || npm i -g pm2
-            npm ci --omit=dev || npm i --production
-            if [ -f prisma/schema.prisma ]; then
-              npx prisma generate --schema prisma/schema.prisma || true
-              npx prisma migrate deploy --schema prisma/schema.prisma || true
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" 'bash -lc "
+            set -euo pipefail
+            cd '"${DEPLOY_PATH}"'
+
+            # NVM/Node u login shellu
+            if [ ! -s ~/.nvm/nvm.sh ]; then
+              curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
             fi
-            pm2 start index.js --name \"$PM2_APP\" --time --node-args=\"--env-file=.env\" || pm2 reload \"$PM2_APP\"
+            . ~/.nvm/nvm.sh
+            nvm install 22
+            nvm use 22
+
+            npm ci --omit=dev
+            npx prisma generate || true
+
+            if pm2 describe '"${PM2_APP}"' >/dev/null 2>&1; then
+              pm2 reload '"${PM2_APP}"' --update-env
+            else
+              pm2 start index.js --name '"${PM2_APP}"' --node-args=\"--env-file=.env\"
+            fi
             pm2 save
-          '"
+          "'
 
       - name: Healthcheck backend (localhost)
+        id: health
         run: |
-          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" << 'EOF'
-          set -euo pipefail
-          # učitaj profile (PATH), pa nvm i Node
-          [ -f ~/.bashrc ] && . ~/.bashrc || true
-          [ -f ~/.profile ] && . ~/.profile || true
-          export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" || true
-          nvm use --lts >/dev/null 2>&1 || true
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" 'bash -lc "
+            set -e
+            curl -fsS --max-time 8 http://127.0.0.1:8080/healthz
+          "'
 
-          echo "Probing http://127.0.0.1:8080/healthz ..."
-          for i in {1..20}; do
-            if curl -fsS -m 2 http://127.0.0.1:8080/healthz | grep -q healthy; then
-              echo "OK: backend is up"
-              exit 0
-            fi
-            sleep 1
-          done
-
-          echo "Healthcheck FAILED — dumping PM2 status and last logs"
-          command -v pm2 >/dev/null 2>&1 && pm2 status || echo "pm2 not found"
-          command -v pm2 >/dev/null 2>&1 && pm2 logs "$PM2_APP" --lines 120 || true
-          exit 1
-          EOF
+      - name: Show PM2 logs if healthcheck failed
+        if: failure() && steps.health.outcome == 'failure'
+        run: |
+          ssh -p "${SSH_PORT}" "${SSH_USER}@${SSH_HOST}" 'bash -lc "
+            pm2 status || true
+            echo '===== ERROR LOG ====='
+            tail -n 120 ~/.pm2/logs/'"${PM2_APP}"'-error.log || true
+            echo '===== OUT LOG ====='
+            tail -n 80 ~/.pm2/logs/'"${PM2_APP}"'-out.log || true
+          "'
