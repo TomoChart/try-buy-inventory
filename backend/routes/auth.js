@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 
-// Auth routes
 router.post('/invite', (req, res) => {
   res.send('Invite user');
 });
