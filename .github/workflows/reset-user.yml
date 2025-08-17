@@ -20,29 +20,37 @@ jobs:
       - name: Install bcryptjs
         run: npm install bcryptjs@2.x --no-audit --no-fund
 
-      - name: Compute bcrypt hash
-        id: h
+      - name: Hash password & update user in DB
         run: |
-          node -e "const b=require('bcryptjs');b.hash(process.env.PASS,12).then(h=>{console.log(h)})" > hash.txt
-          echo "hash=$(cat hash.txt)" >> $GITHUB_OUTPUT
-        env:
-          PASS: ${{ github.event.inputs.password }}
+          # 1) generiraj bcrypt hash lokalno u actionu (nema ESM glavobolje)
+          npm init -y >/dev/null 2>&1
+          npm i bcryptjs >/dev/null 2>&1
+          HASH=$(node -e "const b=require('bcryptjs'); console.log(b.hashSync(process.env.PW, 12));" )
+          echo "Generated hash length: $(printf "%s" "$HASH" | wc -c)"
 
-      - name: Upsert user in Postgres
+          # 2) sigurno upiši u Postgres (single-quoted heredoc sprječava ekspanziju $)
+          psql "${{ env.PG_URL }}" <<'SQL'
+          DO $do$
+          DECLARE
+            v_email text := '${{ github.event.inputs.email }}';
+            v_hash  text := 'REPLACE_ME';
+          BEGIN
+            UPDATE "User"
+               SET "passwordHash" = v_hash,
+                   "updatedAt" = NOW()
+             WHERE email = v_email;
+          END $do$;
+          SQL
+
+          # 3) zamijeni REPLACE_ME točnim hashom bez da shell dira $ znakove
+          #    (psql je već izvršen; gornji DO blok je samo “template” – umjesto DO koristi ovaj direktni UPDATE):
+          psql "${{ env.PG_URL }}" -c "UPDATE \"User\" SET \"passwordHash\"='$(printf %s \"$HASH\" | sed "s/'/''/g")', \"updatedAt\"=NOW() WHERE email='${{ github.event.inputs.email }}';"
+
+          # 4) pokaži prva 3 znaka hasha radi provjere (bez iznošenja cijelog hasha)
+          echo "Hash prefix: $(printf '%s' \"$HASH\" | cut -c1-7)"
         env:
-          PG_URL: ${{ secrets.PG_URL }}
-          EMAIL:  ${{ github.event.inputs.email }}
-          HASH:   ${{ steps.h.outputs.hash }}
-        run: |
-          # ako je email UNIQUE u tablici, ovo će ili kreirati ili resetirati lozinku
-          SQL=$(cat <<'EOSQL'
-          INSERT INTO "User"(email, role, "passwordHash")
-          VALUES ($$'"$EMAIL"'$$, 'superadmin', $$'"$HASH"'$$)
-          ON CONFLICT (email) DO UPDATE
-          SET "passwordHash" = EXCLUDED."passwordHash";
-          EOSQL
-          )
-          echo "$SQL" | psql "$PG_URL"
+          PW: ${{ github.event.inputs.password }}
+          PGPASSWORD: ${{ secrets.PG_PASS }}
 
 
       - name: Read hash from DB (mask safely)
