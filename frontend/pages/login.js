@@ -1,7 +1,6 @@
 // frontend/pages/login.js
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
-import { LoginForm } from "../components/LoginForm";
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
