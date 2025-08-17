@@ -9,7 +9,8 @@ const { PrismaClient } = require('@prisma/client');
 dotenv.config();
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true }));
 
 // CORS: dinamički origin i preflight
 const allowed = process.env.CORS_ORIGINS
