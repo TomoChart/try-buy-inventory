@@ -91,14 +91,18 @@ router.post('/auth/login', async (req, res) => {
 module.exports = router;
 
 // --- DEV RESET PASSWORD FLOW ---
-// 1. Generiraj reset token (prikazuje se na ekranu, ne šalje email)
+
+// 1. Generiraj novu random lozinku, postavi je korisniku i vrati je u responseu (bez emaila, bez tokena)
 router.post('/auth/dev-reset-request', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email required' });
   const user = await prisma.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
   if (!user) return res.status(404).json({ error: 'User not found' });
-  const token = jwt.sign({ userId: user.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '15m' });
-  res.json({ resetToken: token, resetUrl: `/reset-password?token=${token}` });
+  // Generiraj random lozinku (12 znakova, slova i brojevi)
+  const newPassword = Array.from({length: 12}, () => Math.random().toString(36).charAt(2)).join('');
+  const hashed = await bcrypt.hash(newPassword, 10);
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: hashed } });
+  res.json({ newPassword });
 });
 
 // 2. Reset lozinke pomoću tokena

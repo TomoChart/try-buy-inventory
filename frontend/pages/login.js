@@ -43,12 +43,14 @@ function DevResetModal({ onClose, backendUrl }) {
         </form>
         {resetResult && (
           <div className="bg-gray-100 p-2 rounded text-xs break-all mt-2">
-            <div className="mb-1">Reset link/token:</div>
-            <div className="mb-2"><code>{resetResult.resetUrl || resetResult.error}</code></div>
-            {resetResult.resetUrl && (
-              <a href={resetResult.resetUrl} className="text-blue-600 underline" onClick={onClose}>
-                Otvori stranicu za unos nove lozinke
-              </a>
+            {resetResult.newPassword ? (
+              <>
+                <div className="mb-1 font-semibold text-green-700">Nova lozinka:</div>
+                <div className="mb-2 text-lg font-mono text-green-900 select-all">{resetResult.newPassword}</div>
+                <div className="text-gray-600 text-xs">Kopiraj lozinku i prijavi se s njom.</div>
+              </>
+            ) : (
+              <div className="text-red-600">{resetResult.error || 'Greška.'}</div>
             )}
           </div>
         )}
