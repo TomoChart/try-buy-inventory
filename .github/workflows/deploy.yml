@@ -43,17 +43,18 @@ jobs:
 
       - name: Install deps, Prisma, PM2 reload on VPS
         run: |
-          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" << EOF
-          set -e
-          export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-          cd "$DEPLOY_PATH"
-          command -v pm2 >/dev/null 2>&1 || npm i -g pm2
-          npm ci --omit=dev || npm i --production
-          if [ -f prisma/schema.prisma ]; then
-            npx prisma generate --schema prisma/schema.prisma || true
-            npx prisma migrate deploy --schema prisma/schema.prisma || true
-          fi
-          pm2 start index.js --name "$PM2_APP" --time --node-args="--env-file=.env" || pm2 reload "$PM2_APP"
-          pm2 save
-          EOF
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" 'bash -lc "
+            set -e
+            export NVM_DIR=\"$HOME/.nvm\"
+            [ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\"
+            cd \"$DEPLOY_PATH\"
+            node -v && npm -v || true
+            command -v pm2 >/dev/null 2>&1 || npm i -g pm2
+            npm ci --omit=dev || npm i --production
+            if [ -f prisma/schema.prisma ]; then
+              npx prisma generate --schema prisma/schema.prisma || true
+              npx prisma migrate deploy --schema prisma/schema.prisma || true
+            fi
+            pm2 start index.js --name \"$PM2_APP\" --time --node-args=\"--env-file=.env\" || pm2 reload \"$PM2_APP\"
+            pm2 save
+          "'
