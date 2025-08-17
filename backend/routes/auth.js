@@ -22,11 +22,15 @@ router.post('/auth/login', async (req, res) => {
   try {
     const rawEmail = String(req.body?.email || '').trim();
     const password = String(req.body?.password || '');
+    const envEmail = String(process.env.ADMIN_EMAIL || '').trim();
+    const envPass  = String(process.env.ADMIN_PASSWORD || '').trim();
+    const devOn    = String(process.env.DEV_LOGIN_BYPASS || '').toLowerCase() === 'true';
 
-    // 0) Dev backdoor — vraća token bez DB-a ako je enable-an
-    if (DEV_BYPASS_ON &&
-        rawEmail.toLowerCase() === String(process.env.ADMIN_EMAIL).toLowerCase() &&
-        password === process.env.ADMIN_PASSWORD) {
+    // DEV bypass (omogućuje ulaz odmah, dok ne dovršimo DB/seed)
+    if (devOn &&
+        rawEmail.toLowerCase() === envEmail.toLowerCase() &&
+        password === envPass) {
+      console.log('[DEV_LOGIN_BYPASS] OK for', rawEmail);
       const token = jwt.sign(
         { email: rawEmail, role: 'superadmin', countryId: null },
         process.env.JWT_SECRET,
