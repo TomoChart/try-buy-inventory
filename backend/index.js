@@ -244,6 +244,11 @@ app.get("/devices", async (req, res) => {
   }
 });
 
+
+// Admin users router
+const adminUsersRouter = require('./routes/adminUsers');
+app.use(adminUsersRouter);
+
 const PORT = process.env.PORT || 8080;
 // VAŽNO: slušaj na 0.0.0.0 da Fly proxy može doći do appa
 app.listen(PORT, "0.0.0.0", () => {
