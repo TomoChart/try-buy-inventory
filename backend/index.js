@@ -76,29 +76,41 @@ app.get('/healthz', (req, res) => {
 // Novi sigurni blok za login
 app.post('/auth/login', async (req, res) => {
   try {
-    const { email, password } = req.body || {};
+    const email = (req.body?.email || '').trim().toLowerCase();
+    const password = req.body?.password ?? '';
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password required' });
+      return res.status(400).json({ error: 'Missing email or password' });
     }
 
-    // dohvat korisnika po emailu (ne po id-u)
-    const user = await prisma.user.findFirst({ where: { email } });
+    // Case-insensitive lookup
+    const user = await prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+    });
+
     if (!user || !user.passwordHash) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // usporedba lozinke
-    const ok = await bcrypt.compare(String(password), String(user.passwordHash));
-    if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+    const ok = await bcrypt.compare(password, user.passwordHash);
+    if (!ok) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
 
-    // JWT payload
-    const payload = { id: user.id, email: user.email, role: user.role, countryId: user.countryId };
-    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' });
+    if (!process.env.JWT_SECRET) {
+      console.error('Missing JWT_SECRET');
+      return res.status(500).json({ error: 'Server misconfigured' });
+    }
+
+    const token = jwt.sign(
+      { sub: user.id, role: user.role, countryId: user.countryId ?? null },
+      process.env.JWT_SECRET,
+      { expiresIn: '12h' }
+    );
 
     return res.json({ token });
   } catch (e) {
-    console.error('LOGIN_ERROR', e);
-    return res.status(500).json({ error: 'Login failed' });
+    console.error('login error', e);
+    return res.status(500).json({ error: 'Server error' });
   }
 });
 
