@@ -6,7 +6,11 @@
   "prisma": { "seed": "node prisma/seed.js" },
   "scripts": {
     "prisma:generate": "prisma generate",
-    "prisma:seed": "prisma db seed"
+    "prisma:seed": "prisma db seed",
+    "seed:superadmin": "node -r dotenv/config ./seed-superadmin.js",
+    "seed:admins": "node -r dotenv/config ./seed-country-admins.js",
+    "seed:all": "node -r dotenv/config ./seed.js",
+    "start": "node index.js"
   },
   "dependencies": {
     "@flydotio/litestream": "^1.0.1",
