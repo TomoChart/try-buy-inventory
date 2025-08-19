@@ -1,6 +1,9 @@
 import React, { useState } from "react";
 import { useRouter } from "next/router";
-import { API, TOKEN_KEY, parseJwt, countryCodeById } from "../lib/auth";
+import { TOKEN_KEY, parseJwt, countryCodeById } from "../lib/auth";
+
+// Use NEXT_PUBLIC_API_URL directly for API calls
+const API = process.env.NEXT_PUBLIC_API_URL || "https://api.try-buy-inv.net";
 
 // DEV reset password modal
 function DevResetModal({ onClose }) {
@@ -13,7 +16,7 @@ function DevResetModal({ onClose }) {
 		setResetResult(null);
 		setLoading(true);
 		try {
-			const res = await fetch(`${API}/auth/dev-reset-request`, {
+					   const res = await fetch(`${API}/auth/dev-reset-request`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ email: resetEmail })
@@ -72,43 +75,44 @@ export default function LoginForm() {
 		e.preventDefault();
 		setErr("");
 		setSubmitting(true);
-		try {
-			const res = await fetch(`${API}/auth/login`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				mode: "cors",
-				body: JSON.stringify({ email, password })
-			});
-			if (!res.ok) throw new Error(`Login failed (${res.status})`);
-			const data = await res.json(); // { token }
+		   try {
+			   const res = await fetch(`${API}/auth/login`, {
+				   method: "POST",
+				   headers: { "Content-Type": "application/json" },
+				   body: JSON.stringify({ email, password })
+			   });
+			   const data = await res.json();
+			   if (!res.ok) {
+				   setErr(data?.error || `Login failed (${res.status})`);
+				   return;
+			   }
+			   if (!data?.token) throw new Error("No token");
 
-			if (!data?.token) throw new Error("No token");
+			   // Remember me: ako je uključen -> localStorage, inače sessionStorage
+			   if (rememberMe) {
+				   localStorage.setItem(TOKEN_KEY, data.token);
+				   sessionStorage.removeItem(TOKEN_KEY);
+			   } else {
+				   sessionStorage.setItem(TOKEN_KEY, data.token);
+				   localStorage.removeItem(TOKEN_KEY);
+			   }
 
-			// Remember me: ako je uključen -> localStorage, inače sessionStorage
-			if (rememberMe) {
-				localStorage.setItem(TOKEN_KEY, data.token);
-				sessionStorage.removeItem(TOKEN_KEY);
-			} else {
-				sessionStorage.setItem(TOKEN_KEY, data.token);
-				localStorage.removeItem(TOKEN_KEY);
-			}
-
-      // Redirect po zemlji/ulogi
-      const user = parseJwt(data.token);
-      if (user?.countryId) {
-        const code = await countryCodeById(user.countryId);
-        if (code) return router.replace(`/c/${code.toLowerCase()}/dashboard`);
-      }
-      if (user?.role === "superadmin") {
-        return router.replace("/select-country");
-      }
-      // fallback (ako nema countryId ni superadmin)
-      return router.replace("/dashboard");
-    } catch (e) {
-      setErr("Pogrešan email ili lozinka.");
-    } finally {
-      setSubmitting(false);
-    }
+			   // Redirect po zemlji/ulogi
+			   const user = parseJwt(data.token);
+			   if (user?.countryId) {
+				   const code = await countryCodeById(user.countryId);
+				   if (code) return router.replace(`/c/${code.toLowerCase()}/dashboard`);
+			   }
+			   if (user?.role === "superadmin") {
+				   return router.replace("/select-country");
+			   }
+			   // fallback (ako nema countryId ni superadmin)
+			   return router.replace("/dashboard");
+		   } catch (e) {
+			   setErr("Pogrešan email ili lozinka.");
+		   } finally {
+			   setSubmitting(false);
+		   }
   }
 
 	return (
