@@ -1,15 +1,19 @@
 import AppLayout from "../components/AppLayout";
-import { getCurrentUser } from "../lib/auth";
+import { getCurrentUser, getToken } from "../lib/auth";
 import { useEffect } from "react";
 import { useRouter } from "next/router";
 
 export default function Dashboard() {
   const router = useRouter();
   const user = getCurrentUser();
+  const token = getToken();
 
   useEffect(() => {
-    if (!user) router.replace("/login");
-  }, [user, router]);
+    const t = getToken();
+    if (!t) {
+      window.location.assign("/login"); // hard redirect
+    }
+  }, []);
 
   if (!user) return null;
 
