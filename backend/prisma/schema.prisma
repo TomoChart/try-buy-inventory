@@ -14,42 +14,13 @@ model Country {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  role      String   @default("OPERATOR") // OPERATOR | COUNTRY_ADMIN | SUPERADMIN
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  loans     Loan[]
-  Country   Country? @relation(fields: [countryId], references: [id])
-  countryId Int?
-}
-
-model Device {
-  id        String   @id @default(cuid())
-  imei      String?  @unique
-  serial    String?  @unique
-  model     String
-  status    String   @default("APPLIED") // APPLIED, CONTACTED, ISSUED, ON_LOAN, RETURNED, CLOSED
-  country   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  loans Loan[]
-}
-
-model Loan {
-  id         String    @id @default(cuid())
-  deviceId   String
-  userId     String?
-  issuedAt   DateTime?
-  returnedAt DateTime?
-  notes      String?
-
-  device Device @relation(fields: [deviceId], references: [id])
-  user   User?  @relation(fields: [userId], references: [id])
-
-  @@index([deviceId])
-  @@index([userId])
+  email        String   @unique
+  role         String
+  countryId    Int?
+  passwordHash String
+  id           String   @id @default(cuid())
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+  Country      Country? @relation(fields: [countryId], references: [id])
 }
