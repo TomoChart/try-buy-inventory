@@ -1,0 +1,44 @@
+ssh tomovps@vps65864.dreamhostps.com
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+nvm install --lts
+nvm use --lts
+node -v
+npm -v
+//backend folder: 
+cd ~/api.try-buy-inv.net
+
+check user:
+curl -i -X POST "http://127.0.0.1:8080/auth/login" \
+  -H "Content-Type: application/json" \
+  --data '{"email":"t.martinovic@mpg.hr","password":"superuser1"}'
+
+
+ssh tomovps@vps65864.dreamhostps.com "curl -i -X POST http://127.0.0.1:8080/auth/login \
+  -H 'Content-Type: application/json' \
+  --data '{\"email\":\"t.martinovic@mpg.hr\",\"password\":\"superuser1\"}'"
+
+$2a$10$hIJdFNuEqQUlitpthtC7yOswc349AN/DY1Z7SHky4ClhLpGGMYNty
+
+nesto: SHA256:2AFeRjm9VKRTFfNThdXrbumcP2QCQONosZ1+++9qDLM
+
+zadnje promjene fileova
+ls -l
+ls -lh --time-style=long-iso
+Za promjenu env:
+nano .env
+
+
+curl -i -X POST "https://api.try-buy-inv.net/admin/users" \
+ -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwicm9sZSI6IlNVUEVSQURNSU4iLCJjb3VudHJ5SWQiOm51bGwsImlhdCI6MTc1NTYxNTgwNCwiZXhwIjoxNzU1NjU5MDA0fQ.txmHjPiKvEDJyNvd2wp7OGLChjr2wJyYcLOa7kt_JRc" \
+ -H "Content-Type: application/json" \
+ --data '{"email":"i.cesarec@mpg.hr","password":"adminmpg1!","role":"COUNTRY_ADMIN","countryCode":"HR"}'
+
+# Jana Višić (HR)
+curl -i -X POST "https://api.try-buy-inv.net/admin/users" \
+ -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwicm9sZSI6IlNVUEVSQURNSU4iLCJjb3VudHJ5SWQiOm51bGwsImlhdCI6MTc1NTYxNTgwNCwiZXhwIjoxNzU1NjU5MDA0fQ.txmHjPiKvEDJyNvd2wp7OGLChjr2wJyYcLOa7kt_JRc" \
+ -H "Content-Type: application/json" \
+ --data '{"email":"j.visic@mpg.hr","password":"adminmpg!23","role":"COUNTRY_ADMIN","countryCode":"HR"}'
+
+HR: i.cesarec@mpg.hr, pass: adminmpg1! j.visic@mpg.hr, pass: adminmpg!23 SI: d.dolhar@mpgplus.si pass: adminmpgplus!1 RS: marko.veljkovic@xyz-com.rs, pass adminxyz123! Operatori HR: t.tesla@mpg.hr, pass: admintt1 p.ivancic@mpg.hr, pass: adminpi2 Operatori SI matej.kunstek@mpgplus.si, pass: adminmk1 Operatori RS iva.bozovic@xyz-com.rs; pass: adminxyz!1
