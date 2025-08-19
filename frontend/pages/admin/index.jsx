@@ -7,9 +7,10 @@ export default function AdminPage() {
   const [role, setRole] = useState("SUPERADMIN");
 
   useEffect(() => {
-    // prilagodi svojem auth-u:
-    setToken(localStorage.getItem("jwt") || "");
-    setRole(localStorage.getItem("role") || "SUPERADMIN");
+    const t = getToken();                    // ✅ čita iz sessionStorage ili localStorage
+    setToken(t || "");
+    const u = t ? parseJwt(t) : null;        // ✅ role iz tokena
+    setRole(((u?.role) || "SUPERADMIN").toUpperCase());
   }, []);
 
   if (!token) return <p>Prijavi se pa otvori /admin…</p>;
@@ -18,7 +19,7 @@ export default function AdminPage() {
     <AdminPanel
       token={token}
       userRole={role}
-  baseUrl={API}
+      baseUrl={API}
     />
   );
 }

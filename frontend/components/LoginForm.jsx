@@ -2,8 +2,6 @@ import React, { useState } from "react";
 import { useRouter } from "next/router";
 import { API, TOKEN_KEY, parseJwt, countryCodeById } from "../lib/auth";
 
-// Use NEXT_PUBLIC_API_URL directly for API calls
-const API = process.env.NEXT_PUBLIC_API_URL || "https://api.try-buy-inv.net";
 
 // DEV reset password modal
 function DevResetModal({ onClose }) {
