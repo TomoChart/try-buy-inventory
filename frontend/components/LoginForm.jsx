@@ -39,10 +39,10 @@ export function LoginForm() {
       // Redirect po zemlji/ulogi
       const user = parseJwt(data.token);
       if (user?.countryId) {
-        const code = await countryCodeById(user.countryId);
+        const code = await countryCodeById(user.countryId, data.token);
         if (code) return router.replace(`/c/${code.toLowerCase()}/dashboard`);
       }
-      if (user?.role === "superadmin") {
+      if ((user?.role || "").toUpperCase() === "SUPERADMIN") {
         return router.replace("/select-country");
       }
       // fallback (ako nema countryId ni superadmin)
