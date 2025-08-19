@@ -1,3 +1,9 @@
+// Helper za dohvat usera iz tokena (koristi se u više komponenti)
+export function getCurrentUser() {
+  const t = getToken();
+  if (!t) return null;
+  return parseJwt(t);
+}
 // lib/auth.js
 export const TOKEN_KEY = "jwt"; // jedan ključ svugdje
 export const API =
