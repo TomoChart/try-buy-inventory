@@ -93,23 +93,23 @@ export default function LoginForm() {
 				localStorage.removeItem(TOKEN_KEY);
 			}
 
-			// Redirect po zemlji/ulogi
-			const user = parseJwt(data.token);
-			if (user?.countryId) {
-				const code = await countryCodeById(user.countryId);
-				if (code) return router.replace(`/c/${code.toLowerCase()}/dashboard`);
-			}
-			if (user?.role === "superadmin") {
-				return router.replace("/select-country");
-			}
-			// fallback (ako nema countryId ni superadmin)
-			return router.replace("/dashboard");
-		} catch (e) {
-			setErr("Pogrešan email ili lozinka.");
-		} finally {
-			setSubmitting(false);
-		}
-	}
+      // Redirect po zemlji/ulogi
+      const user = parseJwt(data.token);
+      if (user?.countryId) {
+        const code = await countryCodeById(user.countryId);
+        if (code) return router.replace(`/c/${code.toLowerCase()}/dashboard`);
+      }
+      if (user?.role === "superadmin") {
+        return router.replace("/select-country");
+      }
+      // fallback (ako nema countryId ni superadmin)
+      return router.replace("/dashboard");
+    } catch (e) {
+      setErr("Pogrešan email ili lozinka.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
 	return (
 		<div className="max-w-sm mx-auto mt-10">
