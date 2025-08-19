@@ -3,17 +3,32 @@ import AdminPanel from "../../components/admin_panel";
 import { getToken, parseJwt, API } from "../../lib/auth";
 
 export default function AdminPage() {
-  const [token, setToken] = useState("");
-  const [role, setRole] = useState("SUPERADMIN");
+  const [token, setToken] = useState(null);
+  const [role, setRole] = useState(null);
 
   useEffect(() => {
-    const t = getToken();                    // ✅ čita iz sessionStorage ili localStorage
-    setToken(t || "");
-    const u = t ? parseJwt(t) : null;        // ✅ role iz tokena
-    setRole(((u?.role) || "SUPERADMIN").toUpperCase());
+    // prvi pokušaj odmah
+    let t = getToken();
+    if (t) {
+      setToken(t);
+      const u = parseJwt(t);
+      setRole(((u?.role) || "SUPERADMIN").toUpperCase());
+      return;
+    }
+    // ako je login upravo napravio redirect, pričekaj par ms dok se storage ispuni
+    const id = setInterval(() => {
+      t = getToken();
+      if (t) {
+        clearInterval(id);
+        setToken(t);
+        const u = parseJwt(t);
+        setRole(((u?.role) || "SUPERADMIN").toUpperCase());
+      }
+    }, 50);
+    return () => clearInterval(id);
   }, []);
 
-  if (!token) return <p>Prijavi se pa otvori /admin…</p>;
+  if (!token || !role) return <p>Loading…</p>;
 
   return (
     <AdminPanel
