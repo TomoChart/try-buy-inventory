@@ -1,12 +1,7 @@
-// Helper za dohvat usera iz tokena (koristi se u više komponenti)
-export function getCurrentUser() {
-  const t = getToken();
-  if (!t) return null;
-  return parseJwt(t);
-}
 // lib/auth.js
-export const TOKEN_KEY = "jwt";  // JEDAN ključ svugdje
-export const API = process.env.NEXT_PUBLIC_API_URL || "https://api.try-buy-inv.net";
+export const TOKEN_KEY = "jwt"; // jedan ključ svugdje
+export const API =
+  process.env.NEXT_PUBLIC_API_URL || "https://api.try-buy-inv.net";
 
 export function getToken() {
   if (typeof window === "undefined") return null;
@@ -16,18 +11,25 @@ export function getToken() {
 export function parseJwt(token) {
   try {
     const base64 = token.split(".")[1];
-    return JSON.parse(typeof atob === "function" ? atob(base64) : Buffer.from(base64, "base64").toString("utf8"));
-  } catch { return null; }
+    return JSON.parse(typeof atob === "function"
+      ? atob(base64)
+      : Buffer.from(base64, "base64").toString("utf8"));
+  } catch {
+    return null;
+  }
 }
 
-// cache za id->code
-const _cache = new Map();
+// ---- countries helper (traži Authorization; backend ruta je /admin/countries)
+let _countriesCache = null;
 export async function countryCodeById(countryId, token) {
   if (!countryId) return null;
-  if (_cache.size === 0) {
+  if (!_countriesCache) {
     const auth = token || getToken() || "";
-    const res = await fetch(`${API}/admin/countries`, { headers: { Authorization: `Bearer ${auth}` } });
-    if (res.ok) (await res.json()).forEach(c => _cache.set(String(c.id), c.code));
+    const res = await fetch(`${API}/admin/countries`, {
+      headers: { Authorization: `Bearer ${auth}` }
+    });
+    _countriesCache = res.ok ? await res.json() : [];
   }
-  return _cache.get(String(countryId)) || null;
+  const item = _countriesCache.find(c => String(c.id) === String(countryId));
+  return item?.code || null;
 }
