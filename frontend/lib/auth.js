@@ -1,3 +1,9 @@
+// Helper za dohvat usera iz tokena (koristi se u više komponenti)
+export function getCurrentUser() {
+  const t = getToken();
+  if (!t) return null;
+  return parseJwt(t);
+}
 // lib/auth.js
 export const TOKEN_KEY = "jwt";  // JEDAN ključ svugdje
 export const API = process.env.NEXT_PUBLIC_API_URL || "https://api.try-buy-inv.net";
