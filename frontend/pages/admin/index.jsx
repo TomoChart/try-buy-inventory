@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import AdminPanel from "../../components/admin_panel";
+import { getToken, parseJwt, API } from "../../lib/auth";
 
 export default function AdminPage() {
   const [token, setToken] = useState("");
@@ -17,7 +18,7 @@ export default function AdminPage() {
     <AdminPanel
       token={token}
       userRole={role}
-      baseUrl={process.env.NEXT_PUBLIC_API_URL || "https://api.try-buy-inv.net"}
+  baseUrl={API}
     />
   );
 }

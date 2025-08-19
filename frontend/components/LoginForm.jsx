@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useRouter } from "next/router";
-import { TOKEN_KEY, parseJwt, countryCodeById } from "../lib/auth";
+import { API, TOKEN_KEY, parseJwt, countryCodeById } from "../lib/auth";
 
 // Use NEXT_PUBLIC_API_URL directly for API calls
 const API = process.env.NEXT_PUBLIC_API_URL || "https://api.try-buy-inv.net";
@@ -100,11 +100,11 @@ export default function LoginForm() {
 			   // Redirect po zemlji/ulogi
 			   const user = parseJwt(data.token);
 			   if (user?.countryId) {
-				   const code = await countryCodeById(user.countryId);
+				   const code = await countryCodeById(user.countryId, data.token);
 				   if (code) return router.replace(`/c/${code.toLowerCase()}/dashboard`);
 			   }
-			   if (user?.role === "superadmin") {
-				   return router.replace("/select-country");
+			   if ((user?.role || "").toUpperCase() === "SUPERADMIN") {
+				   return router.replace("/admin");
 			   }
 			   // fallback (ako nema countryId ni superadmin)
 			   return router.replace("/dashboard");
