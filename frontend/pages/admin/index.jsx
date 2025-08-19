@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import AdminPanel from "@/components/AdminPanel";
+import AdminPanel from "../../components/admin_panel";
 
 export default function AdminPage() {
   const [token, setToken] = useState("");
