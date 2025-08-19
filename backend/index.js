@@ -1,3 +1,7 @@
+const adminDevicesRouter = require('./routes/adminDevices');
+app.use(adminDevicesRouter);
+const adminMetaRouter = require('./routes/adminMeta');
+app.use(adminMetaRouter);
 
 const express = require('express');
 const cors = require('cors');

@@ -1,82 +1,71 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const { authRequired } = require('../middleware/auth');
 const { isSuperadmin, isCountryAdmin, requireSuperadmin, allowedCreateRole } = require('../middleware/rbac');
+const { resolveCountryContext } = require('../middleware/context');
 
+const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const router = express.Router();
 
-// Helper: dohvati countryId po kodu (HR/SI/RS)
-async function getCountryIdByCode(code) {
-  if (!code) return null;
-  const c = await prisma.country.findUnique({ where: { code: code } });
-  return c ? c.id : null;
-}
-
-// GET /admin/users?country=HR
+// GET /admin/users  (SUPERADMIN može ?country=HR; CA dobiva samo svoju)
 router.get('/admin/users', authRequired, async (req, res) => {
   try {
-    const qCountry = req.query.country || null;
-
-    // Country admin vidi samo svoju zemlju bez obzira na query
-    if (isCountryAdmin(req.user)) {
-      if (!req.user.countryId) return res.json([]);
-      const users = await prisma.user.findMany({
-        where: { countryId: req.user.countryId },
-        select: { id: true, email: true, role: true, countryId: true, createdAt: true, updatedAt: true, name: true },
-        orderBy: { createdAt: 'desc' },
-      });
-      return res.json(users);
-    }
-
-    // Superadmin: može filtrirati po query ?country=HR ili sve
+    const ctx = await resolveCountryContext(req);
     let where = {};
-    if (qCountry) {
-      const cid = await getCountryIdByCode(qCountry);
-      where = { countryId: cid ?? undefined };
+
+    if (isCountryAdmin(req.user)) {
+      where = { countryId: ctx.countryId ?? undefined };
+    } else if (isSuperadmin(req.user)) {
+      // SUPERADMIN bez ?country vidi sve; s ?country filtrira
+      if (ctx.countryId) where = { countryId: ctx.countryId };
     }
+
     const users = await prisma.user.findMany({
       where,
       select: { id: true, email: true, role: true, countryId: true, createdAt: true, updatedAt: true, name: true },
       orderBy: { createdAt: 'desc' },
     });
-    return res.json(users);
+    res.json(users);
   } catch (e) {
     console.error('GET /admin/users error', e);
-    return res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
-// POST /admin/users  { email, password, role, countryCode }
+// POST /admin/users  { email, password, role, countryCode? }
 router.post('/admin/users', authRequired, async (req, res) => {
   try {
     const email = (req.body?.email || '').trim().toLowerCase();
     const password = req.body?.password || '';
-    const role = (req.body?.role || 'OPERATOR').toUpperCase();
-    const countryCode = req.body?.countryCode || null;
-
+    const desiredRole = (req.body?.role || 'OPERATOR').toUpperCase();
     if (!email || !password) return res.status(400).json({ error: 'Missing email or password' });
-    if (!allowedCreateRole(req.user, role)) return res.status(403).json({ error: 'Forbidden: role not allowed' });
+    if (!allowedCreateRole(req.user, desiredRole)) return res.status(403).json({ error: 'Forbidden: role not allowed' });
 
-    let countryId = await getCountryIdByCode(countryCode);
+    const ctx = await resolveCountryContext(req);
 
-    // Country admin smije isključivo u svoju zemlju
-    if (isCountryAdmin(req.user)) {
-      if (!req.user.countryId) return res.status(403).json({ error: 'Forbidden' });
-      countryId = req.user.countryId;
+    // countryId određujemo ovako:
+    // - CA: uvijek njegova zemlja (ctx.countryId)
+    // - SUPERADMIN: ako je poslao body.countryCode → koristimo to; inače, ako je u query-ju birao ?country, koristimo ctx.countryId; fallback null
+    let countryId = ctx.countryId ?? null;
+    if (isSuperadmin(req.user)) {
+      const bodyCode = (req.body?.countryCode || '').toUpperCase().trim();
+      if (bodyCode) {
+        const c = await prisma.country.findUnique({ where: { code: bodyCode } });
+        countryId = c?.id ?? null;
+      }
     }
 
     const passwordHash = bcrypt.hashSync(password, 12);
     const user = await prisma.user.create({
-      data: { email, passwordHash, role, countryId },
+      data: { email, passwordHash, role: desiredRole, countryId },
       select: { id: true, email: true, role: true, countryId: true, createdAt: true, updatedAt: true },
     });
-    return res.status(201).json(user);
+    res.status(201).json(user);
   } catch (e) {
     if (e?.code === 'P2002') return res.status(409).json({ error: 'Email already exists' });
     console.error('POST /admin/users error', e);
-    return res.status(500).json({ error: 'Server error' });
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
