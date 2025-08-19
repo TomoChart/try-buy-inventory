@@ -87,26 +87,24 @@ export default function LoginForm() {
 			}
 			if (!data?.token) throw new Error("No token");
 
-			// Remember me: ako je uključen -> localStorage, inače sessionStorage
-			if (rememberMe) {
-				localStorage.setItem(TOKEN_KEY, data.token);
-				sessionStorage.removeItem(TOKEN_KEY);
-			} else {
-				sessionStorage.setItem(TOKEN_KEY, data.token);
-				localStorage.removeItem(TOKEN_KEY);
-			}
+            // 🔒 pouzdano: postavi u OBA storagea, pa će te /admin odmah “vidjeti”
+            localStorage.setItem(TOKEN_KEY, data.token);
+            sessionStorage.setItem(TOKEN_KEY, data.token);
 
-			// Redirect po zemlji/ulogi
-			const user = parseJwt(data.token);
-			if (user?.countryId) {
-				const code = await countryCodeById(user.countryId, data.token);
-				if (code) return router.replace(`/c/${code.toLowerCase()}/dashboard`);
-			}
-			if ((user?.role || "").toUpperCase() === "SUPERADMIN") {
-				return router.replace("/admin");
-			}
-			// fallback (ako nema countryId ni superadmin)
-			return router.replace("/dashboard");
+            // Redirect po zemlji/ulogi (HARD redirect – izbjegava Next “glitch”)
+            const user = parseJwt(data.token);
+            if (user?.countryId) {
+                const code = await countryCodeById(user.countryId, data.token);
+                if (code) {
+                    window.location.assign(`/c/${code.toLowerCase()}/dashboard`);
+                    return;
+                }
+            }
+            if ((user?.role || "").toUpperCase() === "SUPERADMIN") {
+                window.location.assign("/admin");
+                return;
+            }
+            window.location.assign("/dashboard");
 		} catch (e) {
 			setErr("Greška u mreži ili serveru.");
 		} finally {
