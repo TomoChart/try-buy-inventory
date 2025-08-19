@@ -1,8 +1,3 @@
-const adminDevicesRouter = require('./routes/adminDevices');
-app.use(adminDevicesRouter);
-const adminMetaRouter = require('./routes/adminMeta');
-app.use(adminMetaRouter);
-
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
@@ -16,25 +11,21 @@ const app = express();
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// CORS: robustan origin + Vercel preview
-const FIXED = (process.env.CORS_ORIGINS || '')
-  .split(',')
-  .map(s => s.trim())
-  .filter(Boolean);
-
-const PREVIEW_RE = /^https:\/\/try-buy-inventory-git-[\w-]+\.vercel\.app$/;
+// CORS: dinamički whitelist iz CORS_ORIGINS
+const allowed = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
+  : [];
 
 app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin) return cb(null, true); // curl/postman
-    if (FIXED.includes(origin) || PREVIEW_RE.test(origin)) return cb(null, true);
+  origin(origin, cb) {
+    console.log('CORS_ORIGINS:', allowed, 'Origin:', origin);
+    if (!origin || allowed.includes(origin)) return cb(null, true);
     return cb(new Error('CORS not allowed'), false);
   },
   methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
   allowedHeaders: ['Content-Type','Authorization'],
-  credentials: false
 }));
-app.options('*', cors()); // preflight
+app.options('*', cors());
 
 const prisma = new PrismaClient();
 
