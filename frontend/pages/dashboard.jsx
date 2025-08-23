@@ -1,26 +1,39 @@
-import { useEffect } from "react";
-import { getToken, parseJwt, countryCodeById } from "../lib/auth";
+import { useEffect, useState } from "react";
 import withAuth from "../components/withAuth";
+import AppLayout from "../components/AppLayout";
+import { getToken, parseJwt, TOKEN_KEY } from "../lib/auth";
 
-function Dashboard() {
+function DashboardPage() {
+  const [user, setUser] = useState(null);
+
   useEffect(() => {
-    (async () => {
-      const t = getToken();
-      const u = parseJwt(t);
-      if (!u) { window.location.assign("/login"); return; }
-
-      if (u.countryId) {
-        const code = await countryCodeById(u.countryId, t);
-        if (code) { window.location.assign(`/c/${code.toLowerCase()}/dashboard`); return; }
-      }
-      if ((u.role || "").toUpperCase() === "SUPERADMIN") {
-        window.location.assign("/admin"); return;
-      }
-      // inače ostani na globalnom /dashboard
-    })();
+    const t = getToken();
+    if (!t) { window.location.assign("/login"); return; }
+    const u = parseJwt(t);
+    if (!u) { window.location.assign("/login"); return; }
+    setUser(u);
   }, []);
 
-  return <div className="p-4">Globalni dashboard (bez zemlje)</div>;
+  if (!user) return null;
+
+  return (
+    <AppLayout>
+      <h1 className="text-2xl font-semibold mb-3">Dashboard</h1>
+      <p className="text-slate-600">Dobrodošli, {user.email}!</p>
+      <div className="mt-6">
+        <button
+          onClick={() => {
+            localStorage.removeItem(TOKEN_KEY);
+            sessionStorage.removeItem(TOKEN_KEY);
+            window.location.assign("/login");
+          }}
+          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
+        >
+          Logout
+        </button>
+      </div>
+    </AppLayout>
+  );
 }
 
-export default withAuth(Dashboard);
+export default withAuth(DashboardPage);

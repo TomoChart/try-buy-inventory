@@ -92,16 +92,14 @@ export default function LoginForm() {
             localStorage.setItem(TOKEN_KEY, data.token);
             sessionStorage.setItem(TOKEN_KEY, data.token);
 
-            // Redirect po zemlji/ulogi (HARD redirect – izbjegava Next “glitch”)
-            const user = parseJwt(data.token);
-			if (user?.countryId) {
-				const code = await countryCodeById(user.countryId, data.token);
-				// Redirect to country-specific page or dashboard
-				window.location.href = `/${code}/dashboard`;
+			// Redirect po ulozi (privremeno vraćamo countryadmin na stari dashboard)
+			const user = parseJwt(data.token);
+			if ((user?.role || "").toUpperCase() === "SUPERADMIN") {
+				window.location.assign("/admin");
 				return;
 			}
-			// Default redirect if no countryId
-			window.location.href = "/dashboard";
+			// svi ostali (uklj. country-admin) idu na stari dashboard
+			window.location.assign("/dashboard");
 		} catch (error) {
 			setErr(error.message || "Login error");
 		} finally {
