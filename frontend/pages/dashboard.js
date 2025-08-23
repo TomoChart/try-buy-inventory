@@ -1,9 +1,11 @@
 import AppLayout from "../components/AppLayout";
 import { getToken, parseJwt, TOKEN_KEY } from "../lib/auth";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/router";
 
 export default function Dashboard() {
   const [user, setUser] = useState(null);
+  const router = useRouter();
 
   useEffect(() => {
     const t = getToken();

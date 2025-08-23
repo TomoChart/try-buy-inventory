@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
 import CountrySwitcher from "./CountrySwitcher";
-import { getCurrentUser } from "../lib/auth";
+import { getCurrentUser, getToken } from "../lib/auth";
 import { useActiveCountryCode } from "../lib/route";
 
 const NavLink = ({ href, active, children }) => (
@@ -20,6 +20,7 @@ const NavLink = ({ href, active, children }) => (
 export default function AppLayout({ children }) {
   const router = useRouter();
   const user = getCurrentUser();
+  const token = getToken();
 
   if (typeof window !== "undefined" && !user && router.pathname !== "/login") {
     router.replace("/login");
