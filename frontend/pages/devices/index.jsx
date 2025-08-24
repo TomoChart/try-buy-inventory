@@ -3,6 +3,17 @@ import { useRouter } from "next/router";
 import withAuth from "../../components/withAuth";
 import { API, getToken, parseJwt, countryCodeById } from "../../lib/auth";
 
+const ALL_COLUMNS = [
+  { key: "Model", label: "Model", always: true },
+  { key: "Purpose", label: "Purpose" },
+  { key: "Ownership", label: "Ownership", always: true },
+  { key: "S/N", label: "Serial Number" },
+  { key: "IMEI", label: "IMEI", always: true },
+  { key: "Color", label: "Color" },
+  { key: "Status", label: "Status", always: true },
+  { key: "Location", label: "Location", always: true },
+];
+
 function DevicesPage() {
   const router = useRouter();
   const [rows, setRows] = useState([]);
@@ -12,30 +23,37 @@ function DevicesPage() {
   const [detail, setDetail] = useState(null);
   const [code, setCode] = useState("");
 
+  // filters
+  const [q, setQ] = useState("");
+  const [f, setF] = useState({ status: "", model: "", purpose: "", ownership: "", color: "", city: "" });
+
+  // columns visibility
+  const [visible, setVisible] = useState(() => {
+    const start = {};
+    for (const c of ALL_COLUMNS) start[c.key] = !!c.always;
+    // traženi dodatci: Purpose, S/N, Color -> default uključeni
+    start["Purpose"] = true;
+    start["S/N"] = true;
+    start["Color"] = true;
+    return start;
+  });
+
+  // edit/add modals
+  const [editing, setEditing] = useState(null);   // detail JSON
+  const [adding, setAdding] = useState(false);    // bool
+
   useEffect(() => {
     let cancelled = false;
-
     async function load() {
       try {
         const token = getToken();
         const u = parseJwt(token) || {};
-
-        // 1) ?country=HR u URL-u ima prednost
         let c = String(router.query.country || "").toUpperCase();
-        // 2) inače iz JWT countryId -> code
         if (!c && u.countryId) c = (await countryCodeById(u.countryId, token)) || "";
-        // 3) superadmin bez države -> odabir
-        if (!c && String(u.role || "").toUpperCase() === "SUPERADMIN") {
-          router.replace("/select-country");
-          return;
-        }
+        if (!c && String(u.role || "").toUpperCase() === "SUPERADMIN") { router.replace("/select-country"); return; }
         if (!c) throw new Error("Nije moguće odrediti državu.");
-
         setCode(c);
-
-        const r = await fetch(`${API}/admin/devices/${c.toLowerCase()}/list`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const r = await fetch(`${API}/admin/devices/${c.toLowerCase()}/list`, { headers: { Authorization: `Bearer ${token}` } });
         if (!r.ok) throw new Error("Greška pri dohvaćanju.");
         const data = await r.json();
         if (!cancelled) setRows(data || []);
@@ -45,15 +63,13 @@ function DevicesPage() {
         if (!cancelled) setLoading(false);
       }
     }
-
     load();
     return () => { cancelled = true; };
   }, [router.query.country]);
 
   async function toggleExpand(serial) {
     if (expanded === serial) { setExpanded(null); setDetail(null); return; }
-    setExpanded(serial);
-    setDetail(null);
+    setExpanded(serial); setDetail(null);
     try {
       const token = getToken();
       const r = await fetch(`${API}/admin/devices/${code.toLowerCase()}/${encodeURIComponent(serial)}`, {
@@ -61,48 +77,240 @@ function DevicesPage() {
       });
       if (!r.ok) throw new Error();
       setDetail(await r.json());
-    } catch {
-      setDetail({ error: "Ne mogu dohvatiti detalje." });
+    } catch { setDetail({ error: "Ne mogu dohvatiti detalje." }); }
+  }
+
+  function applyFilters(data) {
+    const Q = q.trim().toLowerCase();
+    return data.filter(r => {
+      if (f.status && String(r.Status || "").toUpperCase() !== String(f.status).toUpperCase()) return false;
+      if (f.model && String(r.Model || "").toLowerCase() !== f.model.toLowerCase()) return false;
+      if (f.purpose && String(r.Purpose || "").toLowerCase() !== f.purpose.toLowerCase()) return false;
+      if (f.ownership && String(r.Ownership || "").toLowerCase() !== f.ownership.toLowerCase()) return false;
+      if (f.color && String(r.Color || "").toLowerCase() !== f.color.toLowerCase()) return false;
+      if (f.city && String(r.City || "").toLowerCase() !== f.city.toLowerCase()) return false;
+      if (!Q) return true;
+      const hay = [
+        r.Model, r.Purpose, r.Ownership, r["S/N"], r.IMEI, r.Color, r.Status, r.Location, r.City, r.Name, r.LeadID
+      ].map(x => String(x || "").toLowerCase()).join("|");
+      return hay.includes(Q);
+    });
+  }
+
+  const filtered = applyFilters(rows);
+
+  function ColumnToggles() {
+    return (
+      <div className="flex flex-wrap gap-3 mb-3">
+        {ALL_COLUMNS.map(c => (
+          <label key={c.key} className={`text-sm flex items-center gap-1 ${c.always ? 'opacity-70 cursor-not-allowed' : ''}`}>
+            <input
+              type="checkbox"
+              disabled={!!c.always}
+              checked={!!visible[c.key]}
+              onChange={e => setVisible(v => ({ ...v, [c.key]: e.target.checked }))}
+            />
+            {c.label}
+          </label>
+        ))}
+      </div>
+    );
+  }
+
+  function FilterBar() {
+    const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort();
+    const mModels = uniq(rows.map(r => r.Model));
+    const mPurpose= uniq(rows.map(r => r.Purpose));
+    const mOwner  = uniq(rows.map(r => r.Ownership));
+    const mColor  = uniq(rows.map(r => r.Color));
+    const mCity   = uniq(rows.map(r => r.City));
+    const statuses= uniq(rows.map(r => String(r.Status || '').toUpperCase()));
+    return (
+      <div className="mb-4 flex flex-wrap items-end gap-3">
+        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search…" className="border rounded px-2 py-1" />
+        <select value={f.status} onChange={e=>setF({...f, status:e.target.value})} className="border rounded px-2 py-1">
+          <option value="">Status</option>
+          {statuses.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select value={f.model} onChange={e=>setF({...f, model:e.target.value})} className="border rounded px-2 py-1">
+          <option value="">Model</option>{mModels.map(v=><option key={v} value={v}>{v}</option>)}
+        </select>
+        <select value={f.purpose} onChange={e=>setF({...f, purpose:e.target.value})} className="border rounded px-2 py-1">
+          <option value="">Purpose</option>{mPurpose.map(v=><option key={v} value={v}>{v}</option>)}
+        </select>
+        <select value={f.ownership} onChange={e=>setF({...f, ownership:e.target.value})} className="border rounded px-2 py-1">
+          <option value="">Ownership</option>{mOwner.map(v=><option key={v} value={v}>{v}</option>)}
+        </select>
+        <select value={f.color} onChange={e=>setF({...f, color:e.target.value})} className="border rounded px-2 py-1">
+          <option value="">Color</option>{mColor.map(v=><option key={v} value={v}>{v}</option>)}
+        </select>
+        <select value={f.city} onChange={e=>setF({...f, city:e.target.value})} className="border rounded px-2 py-1">
+          <option value="">City</option>{mCity.map(v=><option key={v} value={v}>{v}</option>)}
+        </select>
+        <button onClick={()=>setF({status:"",model:"",purpose:"",ownership:"",color:"",city:""})} className="px-3 py-1 rounded border">
+          Clear
+        </button>
+      </div>
+    );
+  }
+
+  function BackBtn() {
+    return <button onClick={() => router.back()} className="mb-3 px-3 py-1 rounded border">← Back</button>;
+  }
+
+  // ===== Edit modal =====
+  function EditModal({ item, onClose }) {
+    const [form, setForm] = useState(() => ({
+      model: item.Model || "",
+      purpose: item.Purpose || "",
+      ownership: item.Ownership || "",
+      imei: item.IMEI || "",
+      control_no: item["Control No"] || "",
+      color: item.Color || "",
+      status: item.Status || "",
+      name: item.Name || "",
+      lead_id: item.LeadID || "",
+      location: item.Location || "",
+      city: item.City || "",
+      comment: item.Comment || "",
+    }));
+    const [saving, setSaving] = useState(false);
+    const serial = item["S/N"] || item.serial_number;
+
+    async function save() {
+      setSaving(true);
+      try {
+        const r = await fetch(`${API}/admin/devices/${code.toLowerCase()}/${encodeURIComponent(serial)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+          body: JSON.stringify(form),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data?.error || "Save failed");
+
+        // refresh glavne liste
+        const ref = await fetch(`${API}/admin/devices/${code.toLowerCase()}/list`, { headers: { Authorization: `Bearer ${getToken()}` }});
+        setRows(await ref.json());
+        onClose();
+      } catch(e){ alert(e.message); } finally { setSaving(false); }
     }
+    return (
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+        <div className="bg-white rounded shadow p-4 w-[680px] max-w-[95vw]">
+          <h3 className="font-semibold text-lg mb-2">Edit device — {serial}</h3>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              ["model","Model"],["purpose","Purpose"],["ownership","Ownership"],
+              ["imei","IMEI"],["control_no","Control No"],["color","Color"],
+              ["status","Status"],["name","Loan name"],["lead_id","LeadID"],
+              ["location","Location"],["city","City"],["comment","Comment"]
+            ].map(([k,label])=>(
+              <label key={k} className="text-sm">
+                <div className="mb-1">{label}</div>
+                <input className="border rounded px-2 py-1 w-full"
+                  value={form[k] ?? ""} onChange={e=>setForm(s=>({...s,[k]:e.target.value}))}/>
+              </label>
+            ))}
+          </div>
+          <div className="mt-3 flex justify-end gap-2">
+            <button className="px-3 py-1 border rounded" onClick={onClose}>Cancel</button>
+            <button className="px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50" onClick={save} disabled={saving}>
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ===== Add modal =====
+  function AddModal({ onClose }) {
+    const [form, setForm] = useState({ model:"", purpose:"", ownership:"", serial_number:"", imei:"", control_no:"", color:"", status:"AVAILABLE", location:"MPG Office", city:"", name:"", lead_id:"", comment:"" });
+    const [saving, setSaving] = useState(false);
+    async function save() {
+      setSaving(true);
+      try {
+        const r = await fetch(`${API}/admin/devices/${code.toLowerCase()}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+          body: JSON.stringify(form),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data?.error || "Create failed");
+
+        const ref = await fetch(`${API}/admin/devices/${code.toLowerCase()}/list`, { headers: { Authorization: `Bearer ${getToken()}` }});
+        setRows(await ref.json());
+        onClose();
+      } catch(e){ alert(e.message); } finally { setSaving(false); }
+    }
+    return (
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+        <div className="bg-white rounded shadow p-4 w-[680px] max-w-[95vw]">
+          <h3 className="font-semibold text-lg mb-2">Add device — {code}</h3>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              ["model","Model*"],["purpose","Purpose"],["ownership","Ownership"],["serial_number","Serial Number*"],
+              ["imei","IMEI"],["control_no","Control No"],["color","Color"],
+              ["status","Status"],["location","Location"],["city","City"],["name","Loan name"],["lead_id","LeadID"],["comment","Comment"]
+            ].map(([k,label])=>(
+              <label key={k} className="text-sm">
+                <div className="mb-1">{label}</div>
+                <input className="border rounded px-2 py-1 w-full"
+                  value={form[k] ?? ""} onChange={e=>setForm(s=>({...s,[k]:e.target.value}))}/>
+              </label>
+            ))}
+          </div>
+          <div className="mt-3 flex justify-end gap-2">
+            <button className="px-3 py-1 border rounded" onClick={onClose}>Cancel</button>
+            <button className="px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50" onClick={save} disabled={saving}>
+              {saving ? "Saving…" : "Create"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (loading) return <div className="p-6">Učitavam…</div>;
   if (err) return <div className="p-6 text-red-600">{err}</div>;
 
+  const headers = ALL_COLUMNS.filter(c => visible[c.key]);
+
   return (
     <div className="p-6">
-      <h1 className="text-xl font-bold mb-4">Devices — {code}</h1>
+      <BackBtn />
+      <h1 className="text-xl font-bold mb-2">Devices — {code}</h1>
+
+      <div className="mb-2 flex items-center gap-2">
+        <button className="px-3 py-1 rounded bg-green-600 text-white" onClick={()=>setAdding(true)}>+ Add device</button>
+      </div>
+
+      <ColumnToggles />
+      <FilterBar />
+
       <div className="overflow-x-auto bg-white rounded shadow">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-100">
             <tr>
-              <th className="text-left p-2">Model</th>
-              <th className="text-left p-2">Ownership</th>
-              <th className="text-left p-2">IMEI</th>
-              <th className="text-left p-2">Status</th>
-              <th className="text-left p-2">Location</th>
+              {headers.map(h => <th key={h.key} className="text-left p-2">{h.label}</th>)}
               <th className="text-left p-2">Akcije</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map(r => (
+            {filtered.map(r => (
               <Fragment key={r.serial_number}>
                 <tr className="border-t hover:bg-gray-50">
-                  <td className="p-2">{r.Model}</td>
-                  <td className="p-2">{r.Ownership}</td>
-                  <td className="p-2">{r.IMEI}</td>
-                  <td className="p-2">{r.Status}</td>
-                  <td className="p-2">{r.Location}</td>
-                  <td className="p-2">
-                    <button className="px-2 py-1 rounded bg-blue-600 text-white"
-                            onClick={() => toggleExpand(r.serial_number)}>
+                  {headers.map(h => <td key={h.key} className="p-2">{r[h.key]}</td>)}
+                  <td className="p-2 flex gap-2">
+                    <button className="px-2 py-1 rounded bg-blue-600 text-white" onClick={() => toggleExpand(r.serial_number)}>
                       {expanded === r.serial_number ? "Sakrij" : "Detalji"}
                     </button>
+                    <button className="px-2 py-1 rounded bg-amber-600 text-white" onClick={() => setEditing(r)}>Edit</button>
                   </td>
                 </tr>
                 {expanded === r.serial_number && (
                   <tr className="bg-gray-50">
-                    <td colSpan={6} className="p-3">
+                    <td colSpan={headers.length + 1} className="p-3">
                       {!detail && <div>Učitavam detalje…</div>}
                       {detail && detail.error && <div className="text-red-600">{detail.error}</div>}
                       {detail && !detail.error && (
@@ -116,6 +324,9 @@ function DevicesPage() {
           </tbody>
         </table>
       </div>
+
+      {editing && <EditModal item={editing} onClose={()=>setEditing(null)} />}
+      {adding && <AddModal onClose={()=>setAdding(false)} />}
     </div>
   );
 }
