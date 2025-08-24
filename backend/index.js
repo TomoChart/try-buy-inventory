@@ -1,3 +1,31 @@
+// --- HR DEVICES & GALAXY TRY ADMIN ROUTES ---
+// GET /admin/devices/hr/list
+app.get('/admin/devices/hr/list', requireAuth, requireRole('country_admin','superadmin'), async (req,res) => {
+  const rows = await prisma.$queryRaw`SELECT * FROM ui_devices_hr_list ORDER BY "Model" ASC, "Status" ASC`;
+  res.json(rows);
+});
+
+// GET /admin/devices/hr/:serial
+app.get('/admin/devices/hr/:serial', requireAuth, requireRole('country_admin','superadmin'), async (req,res) => {
+  const q = 'SELECT * FROM ui_devices_hr_detail WHERE serial_number = $1';
+  const r = await prisma.$queryRawUnsafe(q, req.params.serial);
+  if (!r.length) return res.status(404).json({error:'Not found'});
+  res.json(r[0]);
+});
+
+// GET /admin/galaxy-try/hr/list
+app.get('/admin/galaxy-try/hr/list', requireAuth, requireRole('country_admin','superadmin'), async (req,res) => {
+  const rows = await prisma.$queryRaw`SELECT * FROM ui_galaxytry_hr_list ORDER BY "Datum prijave" DESC NULLS LAST`;
+  res.json(rows);
+});
+
+// GET /admin/galaxy-try/hr/:id
+app.get('/admin/galaxy-try/hr/:id', requireAuth, requireRole('country_admin','superadmin'), async (req,res) => {
+  const q = 'SELECT * FROM ui_galaxytry_hr_detail WHERE submission_id = $1';
+  const r = await prisma.$queryRawUnsafe(q, req.params.id);
+  if (!r.length) return res.status(404).json({error:'Not found'});
+  res.json(r[0]);
+});
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
@@ -241,9 +269,14 @@ app.get("/devices", async (req, res) => {
 });
 
 
+
 // Admin users router
 const adminUsersRouter = require('./routes/adminUsers');
 app.use(adminUsersRouter);
+
+// Admin HR router
+const adminHrRouter = require('./routes/admin.hr');
+app.use('/api', adminHrRouter);
 
 const PORT = process.env.PORT || 8080;
 // VAŽNO: slušaj na 0.0.0.0 da Fly proxy može doći do appa
