@@ -1,7 +1,7 @@
 import React, { useEffect, useState, Fragment } from "react";
 import { useRouter } from "next/router";
-import withAuth from "../components/withAuth";
-import { API, getToken, parseJwt, countryCodeById } from "../lib/auth";
+import withAuth from "../../components/withAuth";
+import { API, getToken, parseJwt, countryCodeById } from "../../lib/auth";
 
 function getVal(row, keys) { for (const k of keys) { const v = row[k]; if (v !== undefined && v !== null && v !== "") return v; } return ""; }
 function fmtDate(v) { if (!v) return ""; const d = new Date(v); return isNaN(d.getTime()) ? String(v) : d.toLocaleDateString("hr-HR"); }
