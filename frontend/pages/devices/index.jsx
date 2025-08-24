@@ -1,200 +1,123 @@
-// pages/devices/index.jsx
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState, Fragment } from "react";
 import { useRouter } from "next/router";
-import { useActiveCountryCode } from "../../lib/route";
-import AppLayout from "../../components/AppLayout";
-import { API, getCurrentUser, countryCodeById } from "../../lib/auth";
+import withAuth from "../../components/withAuth";
+import { API, getToken, parseJwt, countryCodeById } from "../../lib/auth";
 
-const PAGE_SIZE = 10;
-
-export default function DevicesPage() {
-  const user = getCurrentUser();
+function DevicesPage() {
   const router = useRouter();
-  const codeFromPath = useActiveCountryCode(); // npr. /c/hr/devices -> "hr"
-
-  const [code, setCode] = useState(null);       // HR/SI/RS
+  const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [items, setItems] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [code, setCode] = useState("");
 
-  // 1) Odredi country code:
-  //    - prioritet: code iz URL-a (ako postoji)
-  //    - country_admin: mapiraj iz JWT countryId -> code
-  //    - superadmin (nema countryId): pokaži info poruku (odabir zemlje u top baru), pa ne povlači podatke dok code != null
   useEffect(() => {
-    (async () => {
-      if (!user) return; // AppLayout će redirectati na /login
-      if (codeFromPath) {
-        setCode(codeFromPath.toUpperCase());
-        return;
-      }
-      if (user.countryId) {
-        const c = await countryCodeById(user.countryId);
-        setCode((c || "").toUpperCase());
-      } else {
-        setCode(null); // superadmin bez odabrane zemlje
-      }
-    })();
-  }, [user, codeFromPath]);
+    let cancelled = false;
 
-  // 2) Učitaj listu uređaja kad su code/page/search spremni
-  useEffect(() => {
-    let mounted = true;
     async function load() {
-      if (!code) { setLoading(false); return; }
-      setLoading(true); setErr("");
       try {
-        const qs = new URLSearchParams({
-          code,
-          page: String(page),
-          pageSize: String(PAGE_SIZE),
-          ...(search ? { search } : {}),
-        }).toString();
+        const token = getToken();
+        const u = parseJwt(token) || {};
 
-        const res = await fetch(`${API}/devices?${qs}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        if (!mounted) return;
-        setItems(data.items || []);
-        setTotal(data.total || 0);
+        // 1) ?country=HR u URL-u ima prednost
+        let c = String(router.query.country || "").toUpperCase();
+        // 2) inače iz JWT countryId -> code
+        if (!c && u.countryId) c = (await countryCodeById(u.countryId, token)) || "";
+        // 3) superadmin bez države -> odabir
+        if (!c && String(u.role || "").toUpperCase() === "SUPERADMIN") {
+          router.replace("/select-country");
+          return;
+        }
+        if (!c) throw new Error("Nije moguće odrediti državu.");
+
+        setCode(c);
+
+        const r = await fetch(`${API}/admin/devices/${c.toLowerCase()}/list`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!r.ok) throw new Error("Greška pri dohvaćanju.");
+        const data = await r.json();
+        if (!cancelled) setRows(data || []);
       } catch (e) {
-        if (mounted) setErr("Ne mogu učitati uređaje.");
+        if (!cancelled) setErr("Ne mogu dohvatiti uređaje.");
       } finally {
-        if (mounted) setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
+
     load();
-    return () => { mounted = false; };
-  }, [code, page, search]);
+    return () => { cancelled = true; };
+  }, [router.query.country]);
 
-  // 3) Pagination kalkulacije
-  const totalPages = useMemo(
-    () => Math.max(1, Math.ceil((total || 0) / PAGE_SIZE)),
-    [total]
-  );
+  async function toggleExpand(serial) {
+    if (expanded === serial) { setExpanded(null); setDetail(null); return; }
+    setExpanded(serial);
+    setDetail(null);
+    try {
+      const token = getToken();
+      const r = await fetch(`${API}/admin/devices/${code.toLowerCase()}/${encodeURIComponent(serial)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) throw new Error();
+      setDetail(await r.json());
+    } catch {
+      setDetail({ error: "Ne mogu dohvatiti detalje." });
+    }
+  }
+
+  if (loading) return <div className="p-6">Učitavam…</div>;
+  if (err) return <div className="p-6 text-red-600">{err}</div>;
 
   return (
-    <AppLayout>
-      <div className="flex items-end justify-between gap-4 mb-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Uređaji{code ? ` — ${code}` : ""}</h1>
-          <p className="text-slate-600 text-sm">
-            Evidencija uređaja (mock dok ne dodamo pravi model/tablice).
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            placeholder="Pretraži (IMEI/Model/Lokacija)…"
-            value={search}
-            onChange={(e) => { setPage(1); setSearch(e.target.value); }}
-            className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white"
-          />
-        </div>
-      </div>
-
-      {/* Superadmin bez odabrane zemlje */}
-      {!user?.countryId && !code && (
-        <div className="rounded-xl border border-amber-300 bg-amber-50 text-amber-900 p-4 mb-4">
-          Superadmin si – odaberi zemlju u gornjem <b>Country switcheru</b> (top bar) → potom otvori Uređaje za tu zemlju.
-        </div>
-      )}
-
-      {err && <div className="text-red-600 mb-3">{err}</div>}
-
-      {loading ? (
-        <div className="text-slate-600">Učitavam…</div>
-      ) : code ? (
-        <>
-          <DevicesTable rows={items} />
-
-          {/* Pagination */}
-          <div className="mt-4 flex items-center justify-between">
-            <div className="text-sm text-slate-600">
-              Ukupno: <b>{total}</b> • Stranica {page}/{totalPages}
-            </div>
-            <div className="flex gap-2">
-              <button
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm bg-white disabled:opacity-50"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                ← Prethodna
-              </button>
-              <button
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm bg-white disabled:opacity-50"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                Sljedeća →
-              </button>
-            </div>
-          </div>
-        </>
-      ) : null}
-    </AppLayout>
-  );
-}
-
-function DevicesTable({ rows }) {
-  return (
-    <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-      <table className="min-w-full text-sm">
-        <thead className="text-left bg-slate-50">
-          <tr>
-            <Th>IMEI</Th>
-            <Th>Model</Th>
-            <Th>Status</Th>
-            <Th>Lokacija</Th>
-            <Th>Updated</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows && rows.length ? rows.map((r) => (
-            <tr key={r.id} className="border-t border-slate-100">
-              <Td mono>{r.imei}</Td>
-              <Td>{r.model}</Td>
-              <Td>
-                <span className={[
-                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5",
-                  r.status === "active" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-700 border border-slate-200"
-                ].join(" ")}>
-                  <Dot className={r.status === "active" ? "bg-emerald-500" : "bg-slate-400"} />
-                  {r.status}
-                </span>
-              </Td>
-              <Td>{r.location}</Td>
-              <Td mono>{formatDateTime(r.updatedAt)}</Td>
-            </tr>
-          )) : (
+    <div className="p-6">
+      <h1 className="text-xl font-bold mb-4">Devices — {code}</h1>
+      <div className="overflow-x-auto bg-white rounded shadow">
+        <table className="min-w-full text-sm">
+          <thead className="bg-gray-100">
             <tr>
-              <td colSpan={5} className="p-6 text-center text-slate-500">Nema zapisa.</td>
+              <th className="text-left p-2">Model</th>
+              <th className="text-left p-2">Ownership</th>
+              <th className="text-left p-2">IMEI</th>
+              <th className="text-left p-2">Status</th>
+              <th className="text-left p-2">Location</th>
+              <th className="text-left p-2">Akcije</th>
             </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <Fragment key={r.serial_number}>
+                <tr className="border-t hover:bg-gray-50">
+                  <td className="p-2">{r.Model}</td>
+                  <td className="p-2">{r.Ownership}</td>
+                  <td className="p-2">{r.IMEI}</td>
+                  <td className="p-2">{r.Status}</td>
+                  <td className="p-2">{r.Location}</td>
+                  <td className="p-2">
+                    <button className="px-2 py-1 rounded bg-blue-600 text-white"
+                            onClick={() => toggleExpand(r.serial_number)}>
+                      {expanded === r.serial_number ? "Sakrij" : "Detalji"}
+                    </button>
+                  </td>
+                </tr>
+                {expanded === r.serial_number && (
+                  <tr className="bg-gray-50">
+                    <td colSpan={6} className="p-3">
+                      {!detail && <div>Učitavam detalje…</div>}
+                      {detail && detail.error && <div className="text-red-600">{detail.error}</div>}
+                      {detail && !detail.error && (
+                        <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(detail, null, 2)}</pre>
+                      )}
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
-function Th({ children }) {
-  return <th className="px-4 py-2 font-semibold text-slate-700">{children}</th>;
-}
-function Td({ children, mono }) {
-  return <td className={`px-4 py-2 ${mono ? "font-mono" : ""}`}>{children}</td>;
-}
-function Dot({ className }) {
-  return <span className={`inline-block w-2 h-2 rounded-full ${className || ""}`} />;
-}
-function formatDateTime(v) {
-  try {
-    const d = new Date(v);
-    return d.toLocaleString();
-  } catch {
-    return v ?? "";
-  }
-}
+export default withAuth(DevicesPage, { roles: ["country_admin", "superadmin"] });
