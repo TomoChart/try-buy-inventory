@@ -45,14 +45,16 @@ function requireAuth(req, res, next) {
   try { req.user = jwt.verify(token, process.env.JWT_SECRET); next(); }
   catch { return res.status(401).json({ error: 'Invalid token' }); }
 }
-function requireRole(...roles) {
-  return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
-    next();
-  };
-}
+  function requireRole(...roles) {
+    const allowed = roles.map(r => String(r).toUpperCase());
+    return (req, res, next) => {
+      const userRole = String(req.user?.role || "").toUpperCase();
+      if (!userRole || !allowed.includes(userRole)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      next();
+    };
+  }
 
 // ===== Health =====
 app.get('/', (_req, res) => res.send({ status: 'OK', message: 'Try Buy Backend API running' }));
