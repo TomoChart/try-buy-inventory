@@ -31,7 +31,8 @@ export async function countryCodeById(countryId, token) {
   if (!countryId) return null;
   if (!_countriesCache) {
     const auth = token || getToken() || "";
-    const res = await fetch(`${API}/admin/countries`, {
+    const res = await fetch(`${API}/countries`, {
+      // header nije potreban, ali može ostati
       headers: { Authorization: `Bearer ${auth}` }
     });
     _countriesCache = res.ok ? await res.json() : [];
