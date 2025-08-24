@@ -1,207 +1,18 @@
-// ===== helper: provjeri da user smije raditi nad :code =====
-async function ensureCountryAccess(req, res, next) {
-  const code = String(req.params.code || '').toUpperCase();
-  if (!code) return res.status(400).json({ error: 'Missing country code' });
 
-  const role = String(req.user?.role || '').toUpperCase();
-  if (role === 'SUPERADMIN') { req.countryCode = code; return next(); }
-
-  // country_admin: mora odgovarati njegovoj zemlji
-  const user = await prisma.user.findUnique({ where: { id: Number(req.user.id || req.user.sub) } });
-  if (!user || !user.countryId) return res.status(403).json({ error: 'Forbidden' });
-
-  const c = await prisma.country.findUnique({ where: { id: user.countryId } });
-  if (!c || c.code !== code) return res.status(403).json({ error: 'Forbidden' });
-
-  req.countryCode = code;
-  next();
-}
-// ===== Devices: UPDATE (PATCH) =====
-app.patch('/admin/devices/:code/:serial', requireAuth, requireRole('country_admin','superadmin'), ensureCountryAccess, async (req, res) => {
-  const code = req.countryCode;
-  const serial = String(req.params.serial || '').trim();
-  if (!serial) return res.status(400).json({ error: 'Missing serial' });
-
-  // Dozvoljena polja za update (dodaj po potrebi):
-  const {
-    model, purpose, ownership, imei, control_no, color,
-    status, name, lead_id, location, city, comment,
-    date_assigned, expected_return, date_last_change
-  } = req.body || {};
-
-  // Business pravila za status:
-  const S = String(status || '').toUpperCase();
-  if (S) {
-    if (S === 'AVAILABLE') {
-      // auto: MPG Office ako nije zadano
-      if (!location) req.body.location = 'MPG Office';
-    } else if (S === 'LOAN') {
-      if (!name || !city) return res.status(400).json({ error: 'For LOAN, "name" and "city" are required' });
-    } else if (S === 'GALAXYTRY') {
-      if (!lead_id) return res.status(400).json({ error: 'For GALAXYTRY, "lead_id" is required' });
-    }
-  }
-
-  // Gradimo SET dio dinamički da ne prepisujemo s null ako polje nije poslano
-  const fields = [];
-  const vals = [];
-  function setCol(col, val) {
-    if (val !== undefined) { fields.push(`${col} = $${fields.length + 1}`); vals.push(val); }
-  }
-  setCol('model', model);
-  setCol('purpose', purpose);
-  setCol('ownership', ownership);
-  setCol('imei', imei);
-  setCol('control_no', control_no);
-  setCol('color', color);
-  setCol('status', status);
-  setCol('name', name);
-  setCol('leadid', lead_id);
-  setCol('location', location);
-  setCol('city', city);
-  setCol('comment', comment);
-  setCol('date_assigned', date_assigned);
-  setCol('expected_return', expected_return);
-  setCol('date_last_change', date_last_change);
-
-  if (!fields.length) return res.json({ updated: 0 });
-
-  const sql = `
-    UPDATE devices_import
-    SET ${fields.join(', ')}
-    WHERE country_code = $${fields.length + 1} AND serial_number = $${fields.length + 2}
-    RETURNING *`;
-  vals.push(code, serial);
-
-  try {
-    const rows = await prisma.$queryRawUnsafe(sql, ...vals);
-    if (!rows.length) return res.status(404).json({ error: 'Not found' });
-    res.json({ updated: 1, item: rows[0] });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Update failed' });
-  }
-});
-
-// ===== Devices: CREATE (POST) =====
-app.post('/admin/devices/:code', requireAuth, requireRole('country_admin','superadmin'), ensureCountryAccess, async (req, res) => {
-  const code = req.countryCode;
-  const { model, purpose, ownership, serial_number, imei, control_no, color, status, location, city, name, lead_id, comment } = req.body || {};
-  if (!serial_number) return res.status(400).json({ error: 'serial_number is required' });
-
-  try {
-    const sql = `
-      INSERT INTO devices_import(
-        country_code, model, purpose, ownership, serial_number, imei, control_no, color, status, location, city, name, leadid, comment
-      )
-      VALUES($1,$2,$3,$4,$5,COALESCE($6,''),$7,$8,$9,$10,$11,$12,$13,$14)
-      ON CONFLICT (serial_number) DO UPDATE SET
-        model=EXCLUDED.model, purpose=EXCLUDED.purpose, ownership=EXCLUDED.ownership,
-        imei=EXCLUDED.imei, control_no=EXCLUDED.control_no, color=EXCLUDED.color,
-        status=EXCLUDED.status, location=EXCLUDED.location, city=EXCLUDED.city,
-        name=EXCLUDED.name, leadid=EXCLUDED.leadid, comment=EXCLUDED.comment
-      RETURNING *`;
-    const vals = [code, model, purpose, ownership, serial_number, imei, control_no, color, status, location, city, name, lead_id, comment];
-    const rows = await prisma.$queryRawUnsafe(sql, ...vals);
-    res.json({ upserted: 1, item: rows[0] });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Create failed' });
-  }
-});
-
-// ===== Galaxy Try: UPDATE (PATCH) =====
-app.patch('/admin/galaxy-try/:code/:id', requireAuth, requireRole('country_admin','superadmin'), ensureCountryAccess, async (req, res) => {
-  const code = req.countryCode;
-  const id = String(req.params.id || '').trim();
-  if (!id) return res.status(400).json({ error: 'Missing submission id' });
-
-  // Dozvoljena polja:
-  const {
-    first_name, last_name, email, phone, address, city, postal_code,
-    date_contacted, date_handover, model, serial_number, note
-  } = req.body || {};
-
-  const fields = [];
-  const vals = [];
-  function setCol(col, val) { if (val !== undefined) { fields.push(`${col} = $${fields.length + 1}`); vals.push(val); } }
-
-  setCol('first_name', first_name);
-  setCol('last_name', last_name);
-  setCol('email', email);
-  setCol('phone', phone);
-  setCol('address', address);
-  setCol('city', city);
-  setCol('postal_code', postal_code);
-  setCol('date_contacted', date_contacted);
-  setCol('date_handover', date_handover);
-  setCol('model', model);
-  setCol('serial_number', serial_number);
-  setCol('note', note);
-
-  if (!fields.length) return res.json({ updated: 0 });
-
-  const sql = `
-    UPDATE leads_import
-    SET ${fields.join(', ')}
-    WHERE country_code = $${fields.length + 1} AND submission_id = $${fields.length + 2}
-    RETURNING *`;
-  vals.push(code, id);
-
-  try {
-    const rows = await prisma.$queryRawUnsafe(sql, ...vals);
-    if (!rows.length) return res.status(404).json({ error: 'Not found' });
-    res.json({ updated: 1, item: rows[0] });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Update failed' });
-  }
-});
-
-// ===== Galaxy Try: CREATE (POST) =====
-app.post('/admin/galaxy-try/:code', requireAuth, requireRole('country_admin','superadmin'), ensureCountryAccess, async (req, res) => {
-  const code = req.countryCode;
-  const { submission_id, first_name, last_name, email, phone, address, city, postal_code, pickup_city, consent, date_contacted, date_handover, model, serial_number, note, form_name } = req.body || {};
-  if (!submission_id) return res.status(400).json({ error: 'submission_id is required' });
-
-  try {
-    const sql = `
-      INSERT INTO leads_import(
-        country_code, submission_id, first_name, last_name, email, phone, address, city, postal_code, pickup_city, consent, date_contacted, date_handover, model, serial_number, note, form_name
-      )
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-      ON CONFLICT (submission_id) DO UPDATE SET
-        first_name=EXCLUDED.first_name, last_name=EXCLUDED.last_name, email=EXCLUDED.email, phone=EXCLUDED.phone,
-        address=EXCLUDED.address, city=EXCLUDED.city, postal_code=EXCLUDED.postal_code, pickup_city=EXCLUDED.pickup_city,
-        consent=EXCLUDED.consent, date_contacted=COALESCE(EXCLUDED.date_contacted, leads_import.date_contacted),
-        date_handover=COALESCE(EXCLUDED.date_handover, leads_import.date_handover),
-        model=COALESCE(EXCLUDED.model, leads_import.model),
-        serial_number=COALESCE(EXCLUDED.serial_number, leads_import.serial_number),
-        note=EXCLUDED.note, form_name=EXCLUDED.form_name
-      RETURNING *`;
-    const vals = [code, submission_id, first_name, last_name, email, phone, address, city, postal_code, pickup_city, consent, date_contacted, date_handover, model, serial_number, note, form_name];
-    const rows = await prisma.$queryRawUnsafe(sql, ...vals);
-    res.json({ upserted: 1, item: rows[0] });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Create failed' });
-  }
-});
-// index.js – poredano da se app prvo inicijalizira
-
-require('dotenv').config();
-
+// 1) require & init
 const express = require('express');
 const cors = require('cors');
+const dotenv = require('dotenv');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
+dotenv.config();
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// CORS: whitelist iz .env CORS_ORIGINS="a,b,c"
+// 2) CORS
 const allowed = process.env.CORS_ORIGINS
   ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
   : [];
@@ -217,9 +28,9 @@ app.use(cors({
 }));
 app.options('*', cors());
 
+// 3) prisma, helpers, auth middleware
 const prisma = new PrismaClient();
 
-// ===== Helpers =====
 function signToken(user) {
   return jwt.sign(
     { id: user.id, role: user.role, countryId: user.countryId ?? null },
@@ -234,20 +45,39 @@ function requireAuth(req, res, next) {
   try { req.user = jwt.verify(token, process.env.JWT_SECRET); next(); }
   catch { return res.status(401).json({ error: 'Invalid token' }); }
 }
-  function requireRole(...roles) {
-    const allowed = roles.map(r => String(r).toUpperCase());
-    return (req, res, next) => {
-      const userRole = String(req.user?.role || "").toUpperCase();
-      if (!userRole || !allowed.includes(userRole)) {
-        return res.status(403).json({ error: "Forbidden" });
-      }
-      next();
-    };
-  }
+function requireRole(...roles) {
+  const allowed = roles.map(r => String(r).toUpperCase());
+  return (req, res, next) => {
+    const userRole = String(req.user?.role || '').toUpperCase();
+    if (!userRole || !allowed.includes(userRole)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    next();
+  };
+}
+async function ensureCountryAccess(req, res, next) {
+  const code = String(req.params.code || '').toUpperCase();
+  if (!code) return res.status(400).json({ error: 'Missing country code' });
 
-// ===== Health =====
-app.get('/', (_req, res) => res.send({ status: 'OK', message: 'Try Buy Backend API running' }));
-app.get('/healthz', (_req, res) => res.status(200).send({ status: 'healthy' }));
+  const role = String(req.user?.role || '').toUpperCase();
+  if (role === 'SUPERADMIN') { req.countryCode = code; return next(); }
+
+  const user = await prisma.user.findUnique({ where: { id: Number(req.user.id || req.user.sub) } });
+  if (!user || !user.countryId) return res.status(403).json({ error: 'Forbidden' });
+
+  const c = await prisma.country.findUnique({ where: { id: user.countryId } });
+  if (!c || c.code !== code) return res.status(403).json({ error: 'Forbidden' });
+
+  req.countryCode = code;
+  next();
+}
+
+// 4) health rute
+app.get('/',  (_req,res)=>res.send({status:'OK'}));
+app.get('/healthz', (_req,res)=>res.status(200).send({status:'healthy'}));
+
+// 5) SVE ostale rute (devices, galaxy-try, users, …) TEK SADA:
+
 
 // ===== Auth =====
 app.post('/auth/login', async (req, res) => {
