@@ -1,0 +1,46 @@
+{
+  "rows": [
+    {
+      "model": "Galaxy S23",
+      "purpose": "Try&Buy",
+      "ownership": "Samsung",
+      "serial_number": "R58A123ABC",
+      "imei": "358240051111110",
+      "control_no": "CTRL-001",
+      "color": "Black",
+      "status": "Assigned",
+      "name": "Ivan Horvat",
+      "leadid": "L-1001",
+      "location": "Zagreb Store",
+      "city": "Zagreb",
+      "date_assigned": "2025-08-20",
+      "expected_return": "2025-09-05",
+      "date_last_change": "2025-08-25T14:30:00Z",
+      "comment": "Nova isporuka",
+      "submission_id": "SUB-90001",
+      "leadname": "Ivan Horvat",
+      "cityfromlead": "Zagreb"
+    },
+    {
+      "model": "Galaxy A55",
+      "purpose": "Galaxy Try",
+      "ownership": "Partner",
+      "serial_number": "R58B456DEF",
+      "imei": "358240052222220",
+      "control_no": "CTRL-002",
+      "color": "Blue",
+      "status": "In stock",
+      "name": null,
+      "leadid": null,
+      "location": "Split DC",
+      "city": "Split",
+      "date_assigned": null,
+      "expected_return": null,
+      "date_last_change": "2025-08-25T15:00:00Z",
+      "comment": "U skladištu",
+      "submission_id": null,
+      "leadname": null,
+      "cityfromlead": null
+    }
+  ]
+}

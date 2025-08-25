@@ -1,4 +1,3 @@
-
 // 1) require & init
 const express = require('express');
 const cors = require('cors');
@@ -145,26 +144,44 @@ app.get('/countries', async (_req, res) => {
 });
 
 // ===== HR DEVICES & GALAXY TRY (DB view-ovi) =====
-app.get('/admin/devices/hr/list', requireAuth, requireRole('country_admin','superadmin'), async (_req,res) => {
-  const rows = await prisma.$queryRaw`SELECT * FROM ui_devices_hr_list ORDER BY "Model" ASC, "Status" ASC`;
-  res.json(rows);
-});
-app.get('/admin/devices/hr/:serial', requireAuth, requireRole('country_admin','superadmin'), async (req,res) => {
-  const q = 'SELECT * FROM ui_devices_hr_detail WHERE serial_number = $1';
-  const r = await prisma.$queryRawUnsafe(q, req.params.serial);
-  if (!r.length) return res.status(404).json({ error:'Not found' });
-  res.json(r[0]);
-});
-app.get('/admin/galaxy-try/hr/list', requireAuth, requireRole('country_admin','superadmin'), async (_req,res) => {
-  const rows = await prisma.$queryRaw`SELECT * FROM ui_galaxytry_hr_list ORDER BY "Datum prijave" DESC NULLS LAST`;
-  res.json(rows);
-});
-app.get('/admin/galaxy-try/hr/:id', requireAuth, requireRole('country_admin','superadmin'), async (req,res) => {
-  const q = 'SELECT * FROM ui_galaxytry_hr_detail WHERE submission_id = $1';
-  const r = await prisma.$queryRawUnsafe(q, req.params.id);
-  if (!r.length) return res.status(404).json({ error:'Not found' });
-  res.json(r[0]);
-});
+app.get('/admin/devices/hr/list',
+  requireAuth, requireRole('country_admin','superadmin'),
+  async (_req, res) => {
+    const rows = await prisma.$queryRaw`SELECT * FROM ui_devices_hr_list`;
+    res.json(rows);
+  }
+);
+
+// DETALJ (po serijskom)
+app.get('/admin/devices/hr/:serial',
+  requireAuth, requireRole('country_admin','superadmin'),
+  async (req, res) => {
+    const q = 'SELECT * FROM ui_devices_hr_detail WHERE serial_number=$1';
+    const r = await prisma.$queryRawUnsafe(q, req.params.serial);
+    if (!r.length) return res.status(404).json({ error: 'Not found' });
+    res.json(r[0]);
+  }
+);
+
+// GALAXY TRY LISTA HR
+app.get('/admin/galaxy-try/hr/list',
+  requireAuth, requireRole('country_admin','superadmin'),
+  async (_req, res) => {
+    const rows = await prisma.$queryRaw`SELECT * FROM ui_galaxytry_hr_list`;
+    res.json(rows);
+  }
+);
+
+// GALAXY TRY DETALJ (po submission_id)
+app.get('/admin/galaxy-try/hr/:id',
+  requireAuth, requireRole('country_admin','superadmin'),
+  async (req, res) => {
+    const q = 'SELECT * FROM ui_galaxytry_hr_detail WHERE submission_id=$1';
+    const r = await prisma.$queryRawUnsafe(q, req.params.id);
+    if (!r.length) return res.status(404).json({ error: 'Not found' });
+    res.json(r[0]);
+  }
+);
 
 // ===== Demo /stats i /devices (ostavi ako ih koristiš) =====
 const demoDevices = [
@@ -226,3 +243,185 @@ process.on('SIGINT', async () => {
   await prisma.$disconnect();
   process.exit(0);
 });
+
+
+// -------- CSV JSON IMPORT: DEVICES -----------------------------------------
+// POST /admin/devices/:code/import?mode=upsert|replace
+app.post(
+  "/admin/devices/:code/import",
+  requireAuth,
+  requireRole("country_admin", "superadmin"),
+  async (req, res) => {
+    const code = String(req.params.code || "").toUpperCase();
+    const mode = (String(req.query.mode || "upsert").toLowerCase());
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    if (!code) return res.status(400).json({ error: "Missing code" });
+    if (!rows.length) return res.status(400).json({ error: "No rows" });
+    if (rows.length > 5000) return res.status(413).json({ error: "Too many rows" });
+
+    // canonical keys we support (mapirani iz CSV-a na FE)
+    const pick = (r, k) => (r[k] ?? null);
+    const normalize = (r) => ({
+      country_code: code,
+      model:          pick(r,"model"),
+      purpose:        pick(r,"purpose"),
+      ownership:      pick(r,"ownership"),
+      serial_number:  pick(r,"serial_number"),
+      imei:           pick(r,"imei") || pick(r,"imei1"),
+      control_no:     pick(r,"control_no") ?? pick(r,"control") ?? pick(r,"control_number"),
+      color:          pick(r,"color"),
+      status:         pick(r,"status"),
+      name:           pick(r,"name"),
+      leadid:         pick(r,"leadid"),
+      location:       pick(r,"location"),
+      city:           pick(r,"city"),
+      date_assigned:  pick(r,"date_assigned"),
+      expected_return:pick(r,"expected_return"),
+      date_last_change:pick(r,"date_last_change"),
+      comment:        pick(r,"comment"),
+      submission_id:  pick(r,"submission_id"),
+      leadname:       pick(r,"leadname"),
+      cityfromlead:   pick(r,"cityfromlead"),
+    });
+
+    try {
+      await prisma.$executeRawUnsafe("BEGIN");
+      if (mode === "replace") {
+        await prisma.$executeRawUnsafe(
+          "DELETE FROM devices_import WHERE country_code=$1",
+          code
+        );
+      }
+      let upserted = 0;
+      for (const r of rows) {
+        const v = normalize(r);
+        if (!v.serial_number) continue; // bez serijskog ne radimo upsert
+        await prisma.$executeRawUnsafe(
+          `
+          INSERT INTO devices_import
+            (country_code, model, purpose, ownership, serial_number, imei, control_no, color, status, name, leadid, location, city, date_assigned, expected_return, date_last_change, comment, submission_id, leadname, cityfromlead)
+          VALUES
+            ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+          ON CONFLICT (country_code, serial_number) DO UPDATE SET
+            model=EXCLUDED.model,
+            purpose=EXCLUDED.purpose,
+            ownership=EXCLUDED.ownership,
+            imei=EXCLUDED.imei,
+            control_no=EXCLUDED.control_no,
+            color=EXCLUDED.color,
+            status=EXCLUDED.status,
+            name=EXCLUDED.name,
+            leadid=EXCLUDED.leadid,
+            location=EXCLUDED.location,
+            city=EXCLUDED.city,
+            date_assigned=EXCLUDED.date_assigned,
+            expected_return=EXCLUDED.expected_return,
+            date_last_change=EXCLUDED.date_last_change,
+            comment=EXCLUDED.comment,
+            submission_id=EXCLUDED.submission_id,
+            leadname=EXCLUDED.leadname,
+            cityfromlead=EXCLUDED.cityfromlead
+          `,
+          v.country_code, v.model, v.purpose, v.ownership, v.serial_number, v.imei, v.control_no, v.color, v.status,
+          v.name, v.leadid, v.location, v.city, v.date_assigned, v.expected_return, v.date_last_change,
+          v.comment, v.submission_id, v.leadname, v.cityfromlead
+        );
+        upserted++;
+      }
+      await prisma.$executeRawUnsafe("COMMIT");
+      res.json({ ok: true, mode, upserted });
+    } catch (e) {
+      await prisma.$executeRawUnsafe("ROLLBACK");
+      console.error("devices import error", e);
+      res.status(500).json({ error: "Import failed" });
+    }
+  }
+);
+
+// -------- CSV JSON IMPORT: GALAXY TRY --------------------------------------
+// POST /admin/galaxy-try/:code/import?mode=upsert|replace
+app.post(
+  "/admin/galaxy-try/:code/import",
+  requireAuth,
+  requireRole("country_admin", "superadmin"),
+  async (req, res) => {
+    const code = String(req.params.code || "").toUpperCase();
+    const mode = (String(req.query.mode || "upsert").toLowerCase());
+    const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+    if (!code) return res.status(400).json({ error: "Missing code" });
+    if (!rows.length) return res.status(400).json({ error: "No rows" });
+    if (rows.length > 5000) return res.status(413).json({ error: "Too many rows" });
+
+    const pick = (r, k) => (r[k] ?? null);
+    const normalize = (r) => ({
+      country_code:  code,
+      submission_id: pick(r,"submission_id"),
+      created_at:    pick(r,"created_at"),
+      first_name:    pick(r,"first_name"),
+      last_name:     pick(r,"last_name"),
+      email:         pick(r,"email") ?? pick(r,"e_mail") ?? pick(r,"e_pošta"),
+      phone:         pick(r,"phone"),
+      address:       pick(r,"address"),
+      city:          pick(r,"city"),
+      postal_code:   pick(r,"postal_code") ?? pick(r,"zip"),
+      pickup_city:   pick(r,"pickup_city"),
+      consent:       pick(r,"consent"),
+      date_contacted:pick(r,"date_contacted"),
+      date_handover: pick(r,"date_handover"),
+      model:         pick(r,"model"),
+      serial_number: pick(r,"serial_number") ?? pick(r,"s_n"),
+      note:          pick(r,"note"),
+      form_name:     pick(r,"form_name"),
+    });
+
+    try {
+      await prisma.$executeRawUnsafe("BEGIN");
+      if (mode === "replace") {
+        await prisma.$executeRawUnsafe(
+          "DELETE FROM leads_import WHERE country_code=$1",
+          code
+        );
+      }
+      let upserted = 0;
+      for (const r of rows) {
+        const v = normalize(r);
+        if (!v.submission_id) continue; // submission id je ključ
+        await prisma.$executeRawUnsafe(
+          `
+          INSERT INTO leads_import
+            (country_code, submission_id, created_at, first_name, last_name, email, phone, address, city, postal_code, pickup_city, consent, date_contacted, date_handover, model, serial_number, note, form_name)
+          VALUES
+            ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+          ON CONFLICT (submission_id) DO UPDATE SET
+            created_at=EXCLUDED.created_at,
+            first_name=EXCLUDED.first_name,
+            last_name=EXCLUDED.last_name,
+            email=EXCLUDED.email,
+            phone=EXCLUDED.phone,
+            address=EXCLUDED.address,
+            city=EXCLUDED.city,
+            postal_code=EXCLUDED.postal_code,
+            pickup_city=EXCLUDED.pickup_city,
+            consent=EXCLUDED.consent,
+            date_contacted=COALESCE(EXCLUDED.date_contacted, leads_import.date_contacted),
+            date_handover=COALESCE(EXCLUDED.date_handover,  leads_import.date_handover),
+            model=COALESCE(EXCLUDED.model,         leads_import.model),
+            serial_number=COALESCE(EXCLUDED.serial_number, leads_import.serial_number),
+            note=COALESCE(EXCLUDED.note,           leads_import.note),
+            form_name=EXCLUDED.form_name
+          `,
+          v.country_code, v.submission_id, v.created_at, v.first_name, v.last_name, v.email, v.phone, v.address,
+          v.city, v.postal_code, v.pickup_city, v.consent, v.date_contacted, v.date_handover, v.model, v.serial_number,
+          v.note, v.form_name
+        );
+        upserted++;
+      }
+      await prisma.$executeRawUnsafe("COMMIT");
+      res.json({ ok: true, mode, upserted });
+    } catch (e) {
+      await prisma.$executeRawUnsafe("ROLLBACK");
+      console.error("galaxy-try import error", e);
+      res.status(500).json({ error: "Import failed" });
+    }
+  }
+);

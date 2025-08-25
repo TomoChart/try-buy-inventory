@@ -1,0 +1,42 @@
+{
+  "rows": [
+    {
+      "submission_id": "SUB-90001",
+      "created_at": "2025-08-24T10:00:00Z",
+      "first_name": "Ivan",
+      "last_name": "Horvat",
+      "email": "ivan@example.com",
+      "phone": "+38591111222",
+      "address": "Ilica 1",
+      "city": "Zagreb",
+      "postal_code": "10000",
+      "pickup_city": "Zagreb",
+      "consent": "yes",
+      "date_contacted": "2025-08-24",
+      "date_handover": "2025-08-25",
+      "model": "Galaxy S23",
+      "serial_number": "R58A123ABC",
+      "note": "Preferira crni model",
+      "form_name": "Galaxy Try HR"
+    },
+    {
+      "submission_id": "SUB-90002",
+      "created_at": "2025-08-24T11:00:00Z",
+      "first_name": "Ana",
+      "last_name": "Marić",
+      "email": "ana@example.com",
+      "phone": "+38592111222",
+      "address": "Ulica 2",
+      "city": "Split",
+      "postal_code": "21000",
+      "pickup_city": "Split",
+      "consent": "yes",
+      "date_contacted": null,
+      "date_handover": null,
+      "model": null,
+      "serial_number": null,
+      "note": null,
+      "form_name": "Galaxy Try HR"
+    }
+  ]
+}
