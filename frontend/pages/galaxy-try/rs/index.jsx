@@ -62,4 +62,4 @@ function GalaxyTryRS() {
   );
 }
 
-export default withAuth(GalaxyTryRS, { roles: ["COUNTRYADMIN","SUPERADMIN"] });
+export default withAuth(GalaxyTryRS, { roles: ["COUNTRY_ADMIN","SUPERADMIN"] });
