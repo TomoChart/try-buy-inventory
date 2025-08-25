@@ -1,67 +1,78 @@
 import { useEffect, useState } from "react";
 import withAuth from "../../../components/withAuth";
 import { API, getToken } from "../../../lib/auth";
+import CsvImportModal from "../../../components/CsvImportModal";
 
-function GalaxyTryHR() {
+function GalaxyTryHRPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const [showImport, setShowImport] = useState(false);
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
+  async function load() {
+    try {
       setLoading(true);
-      setErr("");
-      try {
-        const r = await fetch(`${API}/admin/galaxy-try/hr/list`, {
-          headers: { Authorization: `Bearer ${getToken()}` },
-        });
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const data = await r.json();
-        if (alive) setRows(data);
-      } catch {
-        if (alive) setErr("Ne mogu dohvatiti prijave.");
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => { alive = false; };
-  }, []);
+      const r = await fetch(`${API}/admin/galaxy-try/hr/list`, {
+        headers: { Authorization: `Bearer ${getToken()}` }
+      });
+      if (!r.ok) throw new Error();
+      setRows(await r.json());
+    } catch {
+      setErr("Ne mogu dohvatiti prijave.");
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  if (loading) return <div className="p-6">Učitavam…</div>;
-  if (err) return <div className="p-6 text-red-600">{err}</div>;
+  useEffect(() => { load(); }, []);
 
   return (
     <div className="p-6">
-      <button onClick={() => history.back()} className="mb-4 px-3 py-1 rounded border">← Back</button>
-      <h1 className="text-xl font-bold mb-4">Galaxy Try — HR</h1>
-
-      <div className="bg-white rounded shadow overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="p-2 text-left">Ime</th>
-              <th className="p-2 text-left">Prezime</th>
-              <th className="p-2 text-left">Email</th>
-              <th className="p-2 text-left">Grad</th>
-              <th className="p-2 text-left">Datum prijave</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={r.submission_id || i} className="border-t">
-                <td className="p-2">{r.first_name || r.FirstName || r["Ime"] || "-"}</td>
-                <td className="p-2">{r.last_name  || r.LastName  || r["Prezime"] || "-"}</td>
-                <td className="p-2">{r.email      || r["E-mail"] || "-"}</td>
-                <td className="p-2">{r.city       || r.City      || r["Grad"] || "-"}</td>
-                <td className="p-2">{r.created_at || r["Datum prijave"] || "-"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-bold">Galaxy Try — HR</h1>
+        <button className="px-3 py-2 bg-blue-600 text-white rounded" onClick={() => setShowImport(true)}>
+          Import CSV
+        </button>
       </div>
+
+      {loading ? <div>Učitavam…</div> : err ? <div className="text-red-600">{err}</div> : (
+        <div className="overflow-x-auto bg-white rounded shadow">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="p-2 text-left">Ime</th>
+                <th className="p-2 text-left">Prezime</th>
+                <th className="p-2 text-left">E-mail</th>
+                <th className="p-2 text-left">Telefon</th>
+                <th className="p-2 text-left">Grad</th>
+                <th className="p-2 text-left">Datum prijave</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.submission_id} className="border-t hover:bg-gray-50">
+                  <td className="p-2">{r["Ime"]}</td>
+                  <td className="p-2">{r["Prezime"]}</td>
+                  <td className="p-2">{r["E-mail"]}</td>
+                  <td className="p-2">{r["Telefon"]}</td>
+                  <td className="p-2">{r["Grad"]}</td>
+                  <td className="p-2">{r["Datum prijave"]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {showImport && (
+        <CsvImportModal
+          onClose={() => { setShowImport(false); load(); }}
+          countryCode="HR"
+          kind="leads"     // <-- za Galaxy Try
+        />
+      )}
     </div>
   );
 }
 
-export default withAuth(GalaxyTryHR, { roles: ["COUNTRY_ADMIN", "SUPERADMIN"] });
+export default withAuth(GalaxyTryHRPage, { roles: ["COUNTRY_ADMIN", "SUPERADMIN"] });
