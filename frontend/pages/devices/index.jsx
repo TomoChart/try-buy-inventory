@@ -297,30 +297,43 @@ function DevicesPage() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map(r => (
-              <Fragment key={r.serial_number}>
-                <tr className="border-t hover:bg-gray-50">
-                  {headers.map(h => <td key={h.key} className="p-2">{r[h.key]}</td>)}
-                  <td className="p-2 flex gap-2">
-                    <button className="px-2 py-1 rounded bg-blue-600 text-white" onClick={() => toggleExpand(r.serial_number)}>
-                      {expanded === r.serial_number ? "Sakrij" : "Detalji"}
-                    </button>
-                    <button className="px-2 py-1 rounded bg-amber-600 text-white" onClick={() => setEditing(r)}>Edit</button>
-                  </td>
-                </tr>
-                {expanded === r.serial_number && (
-                  <tr className="bg-gray-50">
-                    <td colSpan={headers.length + 1} className="p-3">
-                      {!detail && <div>Učitavam detalje…</div>}
-                      {detail && detail.error && <div className="text-red-600">{detail.error}</div>}
-                      {detail && !detail.error && (
-                        <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(detail, null, 2)}</pre>
-                      )}
+            {filtered.map(r => {
+              const key = r.serial_number || r["Serial Number"] || r["S/N"] || r.IMEI;
+              return (
+                <Fragment key={key}>
+                  <tr
+                    key={key}
+                    className="border-t hover:bg-gray-50"
+                  >
+                    <td className="p-2">{r.Model ?? "-"}</td>
+                    <td className="p-2">{r.Purpose ?? "-"}</td>
+                    <td className="p-2">{r.Ownership ?? "-"}</td>
+                    <td className="p-2">{r.serial_number ?? r["Serial Number"] ?? r["S/N"] ?? "-"}</td>
+                    <td className="p-2">{(r.IMEI ?? "").toString().replace(/\.0$/, "") || "-"}</td>
+                    <td className="p-2">{r.Color ?? "-"}</td>
+                    <td className="p-2">{r.Status ?? "-"}</td>
+                    <td className="p-2">{r.Location ?? "-"}</td>
+                    <td className="p-2 flex gap-2">
+                      <button className="px-2 py-1 rounded bg-blue-600 text-white" onClick={() => toggleExpand(key)}>
+                        {expanded === key ? "Sakrij" : "Detalji"}
+                      </button>
+                      <button className="px-2 py-1 rounded bg-amber-600 text-white" onClick={() => setEditing(r)}>Edit</button>
                     </td>
                   </tr>
-                )}
-              </Fragment>
-            ))}
+                  {expanded === key && (
+                    <tr className="bg-gray-50">
+                      <td colSpan={headers.length + 1} className="p-3">
+                        {!detail && <div>Učitavam detalje…</div>}
+                        {detail && detail.error && <div className="text-red-600">{detail.error}</div>}
+                        {detail && !detail.error && (
+                          <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(detail, null, 2)}</pre>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>
