@@ -67,18 +67,25 @@ function GalaxyTryHRPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map(r => (
-                <tr key={r.submission_id} className="border-t hover:bg-gray-50">
+              {rows.map((r) => (
+                <tr
+                  key={r.submission_id}
+                  className="border-t hover:bg-gray-50 cursor-pointer"
+                  onClick={() => router.push(`/galaxy-try/hr/${r.submission_id}`)}
+                >
                   <td className="p-2">{r["First Name"]}</td>
-<td className="p-2">{r["Last Name"]}</td>
-<td className="p-2">{r["Email"]}</td>
-<td className="p-2">{r["Phone"]}</td>
-<td className="p-2">{r["Pickup City"]}</td>
-<td className="p-2">{r["Created At"]}</td>
-<td className="p-2">{r["Contacted At"]}</td>
-<td className="p-2">{r["Handover At"]}</td>
-      <td className="p-2">{r["Model"]}</td>
-      <td className="p-2">{r["Serial Number"]}</td>
+                  <td className="p-2">{r["Last Name"]}</td>
+                  <td className="p-2">{r["Email"]}</td>
+                  <td className="p-2">{r["Phone"]}</td>
+                  <td className="p-2">{r["Pickup City"]}</td>
+                  {/* samo datum */}
+                  <td className="p-2">
+                    {r["Created At"] ? new Date(r["Created At"]).toISOString().slice(0,10) : ""}
+                  </td>
+                  <td className="p-2">{r["Contacted At"]}</td>
+                  <td className="p-2">{r["Handover At"]}</td>
+                  <td className="p-2">{r["Model"]}</td>
+                  <td className="p-2">{r["Serial Number"]}</td>
                 </tr>
               ))}
             </tbody>
