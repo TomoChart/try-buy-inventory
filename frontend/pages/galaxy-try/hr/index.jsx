@@ -46,6 +46,10 @@ function GalaxyTryHRPage() {
                 <th className="p-2 text-left">Telefon</th>
                 <th className="p-2 text-left">Grad</th>
                 <th className="p-2 text-left">Datum prijave</th>
+                 <th className="p-2 text-left">Kontaktiran</th>
+    <th className="p-2 text-left">Predaja uređaja</th>
+    <th className="p-2 text-left">Model</th>
+    <th className="p-2 text-left">Serial Number</th> 
               </tr>
             </thead>
             <tbody>
@@ -57,6 +61,10 @@ function GalaxyTryHRPage() {
                   <td className="p-2">{r["Telefon"]}</td>
                   <td className="p-2">{r["Grad"]}</td>
                   <td className="p-2">{r["Datum prijave"]}</td>
+                   <td className="p-2">{r["Kontaktiran"]}</td>
+      <td className="p-2">{r["Predaja uređaja"]}</td>
+      <td className="p-2">{r["Model"]}</td>
+      <td className="p-2">{r["Serial Number"]}</td>
                 </tr>
               ))}
             </tbody>
