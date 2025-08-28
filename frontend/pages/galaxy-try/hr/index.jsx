@@ -21,7 +21,7 @@ function GalaxyTryHRPage() {
       if (!r.ok) throw new Error();
       setRows(await r.json());
     } catch {
-      setErr("Ne mogu dohvatiti prijave.");
+      setErr("Can't fetch applications.");
     } finally {
       setLoading(false);
     }
@@ -54,14 +54,14 @@ function GalaxyTryHRPage() {
           <table className="min-w-full text-sm">
             <thead className="bg-gray-100">
               <tr>
-                <th className="p-2 text-left">Ime</th>
-                <th className="p-2 text-left">Prezime</th>
-                <th className="p-2 text-left">E-mail</th>
-                <th className="p-2 text-left">Telefon</th>
-                <th className="p-2 text-left">Grad</th>
-                <th className="p-2 text-left">Datum prijave</th>
-                 <th className="p-2 text-left">Kontaktiran</th>
-    <th className="p-2 text-left">Predaja uređaja</th>
+            <th className="p-2 text-left">First Name</th>
+<th className="p-2 text-left">Last Name</th>
+<th className="p-2 text-left">Email</th>
+<th className="p-2 text-left">Phone</th>
+<th className="p-2 text-left">Pickup City</th>
+<th className="p-2 text-left">Created At</th>
+<th className="p-2 text-left">Contacted At</th>
+<th className="p-2 text-left">Handover At</th>
     <th className="p-2 text-left">Model</th>
     <th className="p-2 text-left">Serial Number</th> 
               </tr>
@@ -69,14 +69,14 @@ function GalaxyTryHRPage() {
             <tbody>
               {rows.map(r => (
                 <tr key={r.submission_id} className="border-t hover:bg-gray-50">
-                  <td className="p-2">{r["Ime"]}</td>
-                  <td className="p-2">{r["Prezime"]}</td>
-                  <td className="p-2">{r["E-mail"]}</td>
-                  <td className="p-2">{r["Telefon"]}</td>
-                  <td className="p-2">{r["Grad"]}</td>
-                  <td className="p-2">{r["Datum prijave"]}</td>
-                   <td className="p-2">{r["Kontaktiran"]}</td>
-      <td className="p-2">{r["Predaja uređaja"]}</td>
+                  <td className="p-2">{r["First Name"]}</td>
+<td className="p-2">{r["Last Name"]}</td>
+<td className="p-2">{r["Email"]}</td>
+<td className="p-2">{r["Phone"]}</td>
+<td className="p-2">{r["Pickup City"]}</td>
+<td className="p-2">{r["Created At"]}</td>
+<td className="p-2">{r["Contacted At"]}</td>
+<td className="p-2">{r["Handover At"]}</td>
       <td className="p-2">{r["Model"]}</td>
       <td className="p-2">{r["Serial Number"]}</td>
                 </tr>
