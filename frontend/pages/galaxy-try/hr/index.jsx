@@ -2,12 +2,15 @@ import { useEffect, useState } from "react";
 import withAuth from "../../../components/withAuth";
 import { API, getToken } from "../../../lib/auth";
 import CsvImportModal from "../../../components/CsvImportModal";
+import { useRouter } from "next/router";
 
 function GalaxyTryHRPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [showImport, setShowImport] = useState(false);
+  const router = useRouter();
+
 
   async function load() {
     try {
@@ -29,8 +32,19 @@ function GalaxyTryHRPage() {
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={() => router.back()}
+          className="px-3 py-2 border rounded hover:bg-gray-50"
+        >
+          ← Back
+        </button>
+
         <h1 className="text-xl font-bold">Galaxy Try — HR</h1>
-        <button className="px-3 py-2 bg-blue-600 text-white rounded" onClick={() => setShowImport(true)}>
+
+        <button
+          className="px-3 py-2 bg-blue-600 text-white rounded"
+          onClick={() => setShowImport(true)}
+        >
           Import CSV
         </button>
       </div>
