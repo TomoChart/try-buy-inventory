@@ -56,6 +56,20 @@ jobs:
             set -euo pipefail
             cd '"${DEPLOY_PATH}"'
 
+            # --- Ensure PM2 is installed and on PATH ---
+            # install pm2 if missing
+            if ! command -v pm2 >/dev/null 2>&1; then
+              npm install -g pm2
+            fi
+
+            # add npm global bin to PATH for this session
+            NPMBIN="$(npm bin -g 2>/dev/null || true)"
+            if [ -n "$NPMBIN" ] && ! echo "$PATH" | grep -q "$NPMBIN"; then
+              export PATH="$NPMBIN:$PATH"
+            fi
+
+            pm2 -v
+
             # NVM/Node u login shellu
             if [ ! -s ~/.nvm/nvm.sh ]; then
               curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
@@ -67,11 +81,20 @@ jobs:
             npm ci --omit=dev
             npx prisma generate || true
 
-            if pm2 describe '"${PM2_APP}"' >/dev/null 2>&1; then
-              pm2 reload '"${PM2_APP}"' --update-env
+            # --- Start or reload the app safely ---
+            APP_NAME="trybuy-api"            # promijeni ako koristiš drugo ime
+            if pm2 describe "$APP_NAME" >/dev/null 2>&1; then
+              pm2 reload "$APP_NAME"
             else
-              pm2 start index.js --name '"${PM2_APP}"' --node-args=\"--env-file=.env\"
+              # ako imaš ecosystem.config.js u backendu, koristi ga:
+              if [ -f ecosystem.config.js ]; then
+                pm2 start ecosystem.config.js --only "$APP_NAME" || pm2 start ecosystem.config.js --name "$APP_NAME"
+              else
+                # fallback: pokreni index.js iz backend direktorija
+                pm2 start index.js --name "$APP_NAME"
+              fi
             fi
+
             pm2 save
           "'
 
