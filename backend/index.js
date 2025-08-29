@@ -1,4 +1,3 @@
-
 // 1) require & init
 const express = require('express');
 const cors = require('cors');
@@ -504,6 +503,95 @@ app.post(
       await prisma.$executeRawUnsafe("ROLLBACK");
       console.error("galaxy-try import error", e);
       res.status(500).json({ error: "Import failed" });
+    }
+  }
+);
+
+// ===== PATCH DEVICES (po serijskom) =====
+// PATCH /admin/devices/:code/:serial
+// Body: { model?, purpose?, ownership?, imei?, control_no?, color?, status?, name?, leadid?, location?, city?, date_assigned?, expected_return?, date_last_change?, comment? }
+app.patch(
+  "/admin/devices/:code/:serial",
+  requireAuth,
+  requireRole("country_admin", "superadmin"),
+  async (req, res) => {
+    try {
+      const code = String(req.params.code || "").toUpperCase();
+      const serial = String(req.params.serial || "");
+
+      if (!code || !serial) return res.status(400).json({ error: "Missing code or serial" });
+
+      // dozvoljena polja
+      const allowed = [
+        "model","purpose","ownership","imei","control_no","color","status",
+        "name","leadid","location","city",
+        "date_assigned","expected_return","date_last_change","comment"
+      ];
+
+      // priprema payload-a
+      const p = {};
+      for (const k of allowed) if (k in req.body) p[k] = req.body[k];
+
+      // helper za ISO datum
+      const isoOrNull = (v) =>
+        v == null || v === "" ? null : new Date(v).toString() !== "Invalid Date" ? v : null;
+
+      if ("date_assigned"    in p) p.date_assigned    = isoOrNull(p.date_assigned);
+      if ("expected_return"  in p) p.expected_return  = isoOrNull(p.expected_return);
+      if ("date_last_change" in p) p.date_last_change = isoOrNull(p.date_last_change);
+
+      if (!Object.keys(p).length) return res.status(400).json({ error: "No editable fields provided" });
+
+      const sql = `
+        UPDATE devices_import
+        SET
+          model           = COALESCE($1, model),
+          purpose         = COALESCE($2, purpose),
+          ownership       = COALESCE($3, ownership),
+          imei            = COALESCE($4, imei),
+          control_no      = COALESCE($5, control_no),
+          color           = COALESCE($6, color),
+          status          = COALESCE($7, status),
+          name            = COALESCE($8, name),
+          leadid          = COALESCE($9, leadid),
+          location        = COALESCE($10, location),
+          city            = COALESCE($11, city),
+          date_assigned   = COALESCE($12, date_assigned),
+          expected_return = COALESCE($13, expected_return),
+          date_last_change= COALESCE($14, date_last_change),
+          comment         = COALESCE($15, comment)
+        WHERE country_code = $16 AND serial_number = $17
+        RETURNING country_code, serial_number, model, purpose, ownership, imei, control_no, color,
+                  status, name, leadid, location, city, date_assigned, expected_return,
+                  date_last_change, comment
+      `;
+
+      const vals = [
+        p.model ?? null,
+        p.purpose ?? null,
+        p.ownership ?? null,
+        p.imei ?? null,
+        p.control_no ?? null,
+        p.color ?? null,
+        p.status ?? null,
+        p.name ?? null,
+        p.leadid ?? null,
+        p.location ?? null,
+        p.city ?? null,
+        p.date_assigned ?? null,
+        p.expected_return ?? null,
+        p.date_last_change ?? null,
+        p.comment ?? null,
+        code,
+        serial,
+      ];
+
+      const rows = await prisma.$queryRawUnsafe(sql, ...vals);
+      if (!rows.length) return res.status(404).json({ error: "Not found" });
+      return res.json({ ok: true, updated: rows[0] });
+    } catch (e) {
+      console.error("PATCH devices error", e);
+      return res.status(500).json({ error: "Update failed" });
     }
   }
 );
