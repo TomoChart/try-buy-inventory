@@ -162,6 +162,64 @@ app.get('/admin/devices/hr/:serial',
     res.json(r[0]);
   }
 );
+// ===== DEVICES: generičke rute za list i detail po country code =====
+app.get('/admin/devices/:code/list',
+  requireAuth, requireRole('country_admin','superadmin'),
+  async (req, res) => {
+    try {
+      const code = String(req.params.code || '').toUpperCase();
+
+      // dozvoljene zemlje i pripadni VIEW-ovi
+      const VIEW_MAP = {
+        HR: 'ui_devices_hr_list',
+        SI: 'ui_devices_si_list',
+        RS: 'ui_devices_rs_list',
+      };
+
+      const view = VIEW_MAP[code];
+      if (!view) return res.status(400).json({ error: 'Unknown country code' });
+
+      // Dinamičko ime VIEW-a mora ići preko unsafe jer je identifier, ne literal.
+      // (Parametrizacija se koristi samo za vrijednosti/literale, dolje u detail ruti.)
+      const sql = `SELECT * FROM ${view}`;
+      const rows = await prisma.$queryRawUnsafe(sql);
+
+      res.json(rows);
+    } catch (err) {
+      console.error('GET /admin/devices/:code/list error', err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
+app.get('/admin/devices/:code/:serial',
+  requireAuth, requireRole('country_admin','superadmin'),
+  async (req, res) => {
+    try {
+      const code = String(req.params.code || '').toUpperCase();
+      const serial = String(req.params.serial || '');
+
+      const VIEW_MAP = {
+        HR: 'ui_devices_hr_detail',
+        SI: 'ui_devices_si_detail',
+        RS: 'ui_devices_rs_detail',
+      };
+
+      const view = VIEW_MAP[code];
+      if (!view) return res.status(400).json({ error: 'Unknown country code' });
+
+      // Ime VIEW-a je dinamični identifier (unsafe), ali vrijednost ide parametrizirano.
+      const sql = `SELECT * FROM ${view} WHERE serial_number = $1`;
+      const rows = await prisma.$queryRawUnsafe(sql, serial);
+
+      if (!rows.length) return res.status(404).json({ error: 'Not found' });
+      res.json(rows[0]);
+    } catch (err) {
+      console.error('GET /admin/devices/:code/:serial error', err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
 
 // GALAXY TRY LISTA HR
 app.get('/admin/galaxy-try/hr/list',
