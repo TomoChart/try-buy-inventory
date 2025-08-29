@@ -3,7 +3,7 @@ import withAuth from "../../../components/withAuth";
 import { API, getToken } from "../../../lib/auth";
 import CsvImportModal from "../../../components/CsvImportModal";
 import { useRouter } from "next/router";
-import EditableRow from "../../../components/EditableRow";
+
 
 function GalaxyTryHRPage() {
   const [rows, setRows] = useState([]);
