@@ -293,4 +293,89 @@ function EditableRow({ row, onSave }) {
   );
 }
 
+// === Galaxy Try CSV import (UPsert) ===
+// zahtijeva: TOKEN iz getToken(), i `code` (HR/SI/RS) koji već koristiš na ekranu
+async function handleImportGalaxyCsv(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+
+    // 1) parse CSV (simple) -> array of objects
+    const rows = [];
+    const lines = text.replace(/\r/g, '').split('\n').filter(Boolean);
+    if (!lines.length) { alert('Prazan CSV.'); return; }
+    const headers = lines[0].split(',').map(h => h.trim());
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(',');
+      const obj = {};
+      headers.forEach((h, idx) => { obj[h] = (cols[idx] ?? '').trim(); });
+      rows.push(obj);
+    }
+
+    // 2) normalizacija ključeva (kanonski nazivi koje backend očekuje)
+    const normRows = rows.map(r => {
+      const g = (k) => {
+        const keys = Object.keys(r);
+        const hit = keys.find(x => String(x).toLowerCase() === k);
+        return hit ? r[hit] : '';
+      };
+      const getAny = (...alts) => {
+        for (const a of alts) {
+          const v = g(a.toLowerCase());
+          if (v !== undefined && v !== '') return v;
+        }
+        return '';
+      };
+
+      return {
+        // ključno: submission_id je obavezno
+        submission_id: getAny('submission_id'),
+
+        created_at:     getAny('created_at'),
+        first_name:     getAny('first_name'),
+        last_name:      getAny('last_name'),
+        email:          getAny('email','e_mail','e_pošta','e-mail'),
+        phone:          getAny('phone','telefon','mobitel'),
+        address:        getAny('address','adresa'),
+        city:           getAny('city','grad'),
+        postal_code:    getAny('postal_code','zip','poštanski_broj'),
+        pickup_city:    getAny('pickup_city'),
+        consent:        getAny('consent','privola'),
+        date_contacted: getAny('date_contacted'),
+        date_handover:  getAny('date_handover'),
+
+        model:          getAny('model'),
+        serial_number:  getAny('serial_number','s/n','s_n'),
+        note:           getAny('note','napomena'),
+        form_name:      getAny('form_name'),
+      };
+    }).filter(r => r.submission_id); // bez submission_id backend preskače
+
+    if (!normRows.length) { alert('Nema valjanih redova (submission_id nedostaje).'); return; }
+
+    // 3) pozovi backend (UPsert)
+    const token = getToken();
+    if (!token) { alert('Nema tokena. Prijavi se ponovno.'); return; }
+
+    const endpoint = `${API}/admin/galaxy-try/HR/import?mode=upsert`;
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ rows: normRows })
+    });
+
+    const data = await res.json().catch(()=> ({}));
+    if (!res.ok) throw new Error(data?.error || 'Import failed');
+
+    alert(`Import gotov. Upsertano: ${data?.upserted ?? 'n/a'}`);
+    // Ako treba, ovdje napravi refresh liste:
+    // await reloadGalaxyList();
+  } catch (err) {
+    console.error(err);
+    alert(`Greška pri importu: ${err.message}`);
+  }
+}
+
 export default withAuth(GalaxyTryHRPage, { roles: ["COUNTRY_ADMIN", "SUPERADMIN"] });
