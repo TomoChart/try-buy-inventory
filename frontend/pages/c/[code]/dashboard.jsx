@@ -26,5 +26,5 @@ function CountryDashboard() {
   );
 }
 
-export default withAuth(CountryDashboard, { roles: ["COUNTRYADMIN", "SUPERADMIN"] });
+export default withAuth(CountryDashboard, { roles: ["country_admin", "superadmin"] });
 

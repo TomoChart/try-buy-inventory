@@ -1,13 +1,18 @@
-// Helper za dohvat usera iz tokena (koristi se u više komponenti)
+// === ORIGINALNI AUTH (web app radi na ovome) ===
+
+// API base (prod domena kao fallback)
+export const API =
+  process.env.NEXT_PUBLIC_API_URL || "https://api.try-buy-inv.net";
+
+// Čuvamo token pod jednim ključem
+export const TOKEN_KEY = "jwt";
+
+// Trenutni user iz tokena
 export function getCurrentUser() {
   const t = getToken();
   if (!t) return null;
   return parseJwt(t);
 }
-// lib/auth.js
-export const TOKEN_KEY = "jwt"; // jedan ključ svugdje
-export const API =
-  process.env.NEXT_PUBLIC_API_URL || "https://api.try-buy-inv.net";
 
 export function getToken() {
   if (typeof window === "undefined") return null;
@@ -25,14 +30,14 @@ export function parseJwt(token) {
   }
 }
 
-// ---- countries helper (traži Authorization; backend ruta je /admin/countries)
+// ---- countries helper (KAKO JE BILO — javna ruta /countries)
 let _countriesCache = null;
 export async function countryCodeById(countryId, token) {
   if (!countryId) return null;
   if (!_countriesCache) {
     const auth = token || getToken() || "";
-    const res = await fetch(`${API}/countries`, {
-      // header nije potreban, ali može ostati
+    const endpoint = `${API}/countries`;
+    const res = await fetch(endpoint, {
       headers: { Authorization: `Bearer ${auth}` }
     });
     _countriesCache = res.ok ? await res.json() : [];

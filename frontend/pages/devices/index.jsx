@@ -2,6 +2,7 @@ import React, { useEffect, useState, Fragment } from "react";
 import { useRouter } from "next/router";
 import withAuth from "../../components/withAuth";
 import { API, getToken, parseJwt, countryCodeById } from "../../lib/auth";
+import Papa from "papaparse";
 
 const ALL_COLUMNS = [
   { key: "Model", label: "Model", always: true },
@@ -271,6 +272,106 @@ function DevicesPage() {
     );
   }
 
+  // === CSV IMPORT HANDLER I UTIL FUNKCIJE ===
+  async function handleCsvFile(file) {
+    if (!file) return;
+    const ok = confirm(`Uvesti CSV u ${code}?`);
+    if (!ok) return;
+
+    try {
+      const rows = await parseCsvFile(file);
+      if (!rows.length) { alert("CSV je prazan ili nečitljiv."); return; }
+
+      // mapiraj CSV header -> payload polja koja koristimo na POST /admin/devices/:code
+      const mapped = rows.map(mapCsvRowToPayload);
+
+      // batch POST s malim kašnjenjem da ne zatrpamo backend
+      let success = 0, fail = 0;
+      for (const item of mapped) {
+        const res = await fetch(`${API}/admin/devices/${String(code).toLowerCase()}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+          body: JSON.stringify(item),
+        });
+        if (res.ok) success++; else fail++;
+        // kratka pauza
+        await new Promise(r => setTimeout(r, 80));
+      }
+
+      // refresh liste
+      const ref = await fetch(`${API}/admin/devices/${String(code).toLowerCase()}/list`, {
+        headers: { Authorization: `Bearer ${getToken()}` }
+      });
+      setRows(await ref.json());
+
+      alert(`Import gotov. Uspješno: ${success}, neuspješno: ${fail}`);
+    } catch (e) {
+      console.error(e);
+      alert("Greška pri importu: " + (e.message || "nepoznato"));
+    }
+  }
+
+  function parseCsvFile(file) {
+    return new Promise((resolve, reject) => {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (res) => resolve(Array.isArray(res.data) ? res.data : []),
+        error: (err) => reject(err),
+      });
+    });
+  }
+
+  function cleanImei(v) {
+    if (v == null) return "";
+    let s = String(v).trim();
+    // makni trailing ".0" iz Excel-exporta
+    if (/^\d+\.0$/.test(s)) s = s.replace(/\.0$/, "");
+    // makni razmake / crtice
+    s = s.replace(/[\s-]/g, "");
+    return s;
+  }
+
+  // normaliziraj ključeve: trim + lowercase + zamijeni razmake s "_"
+  function mapCsvRowToPayload(r) {
+    // normaliziraj ključeve (makni razmake, lowercase)
+    const norm = {};
+    for (const k of Object.keys(r || {})) {
+      const nk = String(k).trim().toLowerCase().replace(/\s+/g, "_");
+      norm[nk] = r[k];
+    }
+
+    const get = (...alts) => {
+      for (const a of alts) {
+        const v = norm[a.toLowerCase()];
+        if (v !== undefined && v !== null && String(v).trim() !== "") return String(v).trim();
+      }
+      return "";
+    };
+
+    // Mapiranje na polja koja backend POST /admin/devices/:code prima
+    // (dodatna CSV polja ignoriramo)
+    return {
+      model:          get("model"),
+      purpose:        get("purpose"),
+      ownership:      get("ownership"),
+      serial_number:  get("serial_number","serial","s/n","serialnumber"),
+      imei:           cleanImei(get("imei")),
+      control_no:     get("control_no","control_number","controlno"),
+      color:          get("color","colour"),
+      status:         get("status"),
+      location:       get("location"),
+      city:           get("city"),
+      name:           get("name","loan_name","leadname"),
+      lead_id:        get("lead_id","leadid"),
+      comment:        get("comment","note","napomena"),
+
+      // Ako CSV ima ova polja, ZA SAD IH IGNORIRAMO u unosu (ne šaljemo):
+      // country_code, submission_id, cityfromlead, date_assigned, expected_return,
+      // date_last_change — možemo ih dodati kasnije po potrebi.
+    };
+  }
+
   if (loading) return <div className="p-6">Učitavam…</div>;
   if (err) return <div className="p-6 text-red-600">{err}</div>;
 
@@ -283,6 +384,18 @@ function DevicesPage() {
 
       <div className="mb-2 flex items-center gap-2">
         <button className="px-3 py-1 rounded bg-green-600 text-white" onClick={()=>setAdding(true)}>+ Add device</button>
+
+        {/* CSV Import */}
+        <label className="px-3 py-1 rounded border cursor-pointer">
+          Import CSV
+          <input
+            type="file"
+            accept=".csv"
+            className="hidden"
+            onChange={(e) => handleCsvFile(e.target.files?.[0] || null)}
+          />
+        </label>
+        <span className="text-xs opacity-60">Očekivani headeri: Model, Purpose, Ownership, Serial Number, IMEI, Control No, Color, Status, Location, City, Loan name, LeadID, Comment</span>
       </div>
 
       <ColumnToggles />
