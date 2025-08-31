@@ -575,8 +575,10 @@ app.get('/admin/galaxy-try/:code/list',
         return res.status(400).json({ error: 'Unknown country code' });
       }
 
-      // Čitamo direktno iz tablice/leads pogleda i filtriramo po country_code
-      // (ako imaš view, slobodno ostavi SELECT iz view-a, bitno je WHERE country_code = $1)
+      // Napomena:
+      // - izvor je leads_import (ili odgovarajući VIEW ako ga koristiš)
+      // - filtriramo po country_code
+      // - vraćamo i address + city
       const sql = `
         SELECT
           submission_id    AS "Submission ID",
@@ -595,13 +597,13 @@ app.get('/admin/galaxy-try/:code/list',
           note             AS "Note"
         FROM leads_import
         WHERE country_code = $1
-        ORDER BY "Submission ID" DESC
+        ORDER BY created_at DESC NULLS LAST, submission_id DESC
       `;
       const rows = await prisma.$queryRawUnsafe(sql, code);
-      res.json(rows);
+      return res.json(rows || []);
     } catch (err) {
-      console.error('GET /admin/galaxy-try/:code/list error', err);
-      res.status(500).json({ error: 'Server error' });
+      console.error('GT list error', err);
+      return res.status(500).json({ error: 'Server error' });
     }
   }
 );
