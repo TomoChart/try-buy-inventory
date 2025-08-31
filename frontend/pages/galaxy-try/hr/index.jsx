@@ -71,6 +71,27 @@ function GalaxyTryHRPage() {
     setEditingId(null);
   }
 
+  function normalizeRow(r = {}) {
+    return {
+      submission_id: r.submission_id ?? r["Submission ID"] ?? null,
+
+      first_name:     r.first_name     ?? r["First Name"]     ?? null,
+      last_name:      r.last_name      ?? r["Last Name"]      ?? null,
+      email:          r.email          ?? r["Email"]          ?? null,
+      phone:          r.phone          ?? r["Phone"]          ?? null,
+      address:        r.address        ?? r["Address"]        ?? null,
+      city:           r.city           ?? r["City"]           ?? null,
+      pickup_city:    r.pickup_city    ?? r["Pickup City"]    ?? null,
+
+      created_at:     r.created_at     ?? r["Created At"]     ?? null,
+      date_contacted: r.date_contacted ?? r["Contacted At"]   ?? null,
+      date_handover:  r.date_handover  ?? r["Handover At"]    ?? null,
+
+      model:          r.model          ?? r["Model"]          ?? null,
+      serial_number:  r.serial_number  ?? r["Serial Number"]  ?? null,
+      note:           r.note           ?? r["Note"]           ?? null,
+    };
+  }
 
   async function load() {
     try {
@@ -79,7 +100,8 @@ function GalaxyTryHRPage() {
         headers: { Authorization: `Bearer ${getToken()}` }
       });
       if (!r.ok) throw new Error();
-      setRows(await r.json());
+      const data = await r.json();
+      setRows((data || []).map(normalizeRow));
     } catch {
       setErr("Can't fetch applications.");
     } finally {
