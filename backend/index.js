@@ -1,3 +1,97 @@
+// === GALAXY TRY: EDIT (PATCH) po submission_id i country code ===
+// Dozvoljena polja: first_name, last_name, email, phone, address, city,
+// pickup_city, date_contacted, date_handover, model, serial_number, note
+app.patch('/admin/galaxy-try/:code/:submission_id',
+  requireAuth, requireRole('country_admin','superadmin'),
+  async (req, res) => {
+    try {
+      const code = String(req.params.code || '').toUpperCase();
+      const sid  = String(req.params.submission_id || '');
+      if (!['HR','SI','RS'].includes(code) || !sid) {
+        return res.status(400).json({ error: 'Bad request' });
+      }
+
+      const ALLOWED = new Set([
+        'first_name','last_name','email','phone',
+        'address','city','pickup_city',
+        'date_contacted','date_handover',
+        'model','serial_number','note'
+      ]);
+
+      // zadrži samo dozvoljena polja koja su poslana
+      const input = {};
+      for (const [k,v] of Object.entries(req.body || {})) {
+        if (ALLOWED.has(k)) input[k] = v ?? null;
+      }
+      if (!Object.keys(input).length) {
+        return res.status(400).json({ error: 'Nothing to update' });
+      }
+
+      // dinamički SET dio za UPDATE
+      const cols = Object.keys(input);
+      const setClauses = cols.map((c,i) => `"${c}" = $${i+1}`).join(', ');
+      const params = cols.map(c => input[c]);
+
+      // WHERE parametri
+      params.push(sid);         // $N-1
+      params.push(code);        // $N
+
+      const sql = `
+        UPDATE leads_import
+        SET ${setClauses}, updated_at = NOW()
+        WHERE submission_id = $${cols.length+1}
+          AND country_code  = $${cols.length+2}
+        RETURNING
+          submission_id    AS "Submission ID",
+          created_at       AS "Created At",
+          first_name       AS "First Name",
+          last_name        AS "Last Name",
+          email            AS "Email",
+          phone            AS "Phone",
+          address          AS "Address",
+          city             AS "City",
+          pickup_city      AS "Pickup City",
+          date_contacted   AS "Contacted At",
+          date_handover    AS "Handover At",
+          model            AS "Model",
+          serial_number    AS "Serial Number",
+          note             AS "Note"
+      `;
+      const rows = await prisma.$queryRawUnsafe(sql, ...params);
+      if (!rows.length) return res.status(404).json({ error: 'Not found' });
+      return res.json({ ok: true, item: rows[0] });
+    } catch (err) {
+      console.error('GT edit error', err);
+      return res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
+// === GALAXY TRY: DELETE po submission_id i country code ===
+app.delete('/admin/galaxy-try/:code/:submission_id',
+  requireAuth, requireRole('country_admin','superadmin'),
+  async (req, res) => {
+    try {
+      const code = String(req.params.code || '').toUpperCase();
+      const sid  = String(req.params.submission_id || '');
+      if (!['HR','SI','RS'].includes(code) || !sid) {
+        return res.status(400).json({ error: 'Bad request' });
+      }
+
+      const sql = `
+        DELETE FROM leads_import
+        WHERE submission_id = $1 AND country_code = $2
+        RETURNING submission_id
+      `;
+      const rows = await prisma.$queryRawUnsafe(sql, sid, code);
+      if (!rows.length) return res.status(404).json({ error: 'Not found' });
+      return res.json({ ok: true, deleted: sid });
+    } catch (err) {
+      console.error('GT delete error', err);
+      return res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
 // 1) require & init
 const express = require('express');
 const cors = require('cors');

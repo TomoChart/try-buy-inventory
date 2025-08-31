@@ -73,23 +73,20 @@ function GalaxyTryHRPage() {
 
   function normalizeRow(r = {}) {
     return {
-      submission_id: r.submission_id ?? r["Submission ID"] ?? null,
-
-      first_name:     r.first_name     ?? r["First Name"]     ?? null,
-      last_name:      r.last_name      ?? r["Last Name"]      ?? null,
-      email:          r.email          ?? r["Email"]          ?? null,
-      phone:          r.phone          ?? r["Phone"]          ?? null,
-      address:        r.address        ?? r["Address"]        ?? null,
-      city:           r.city           ?? r["City"]           ?? null,
-      pickup_city:    r.pickup_city    ?? r["Pickup City"]    ?? null,
-
-      created_at:     r.created_at     ?? r["Created At"]     ?? null,
-      date_contacted: r.date_contacted ?? r["Contacted At"]   ?? null,
-      date_handover:  r.date_handover  ?? r["Handover At"]    ?? null,
-
-      model:          r.model          ?? r["Model"]          ?? null,
-      serial_number:  r.serial_number  ?? r["Serial Number"]  ?? null,
-      note:           r.note           ?? r["Note"]           ?? null,
+      submission_id: r.submission_id ?? r["Submission ID"] ?? "",
+      first_name:     r.first_name     ?? r["First Name"]     ?? "",
+      last_name:      r.last_name      ?? r["Last Name"]      ?? "",
+      email:          r.email          ?? r["Email"]          ?? "",
+      phone:          r.phone          ?? r["Phone"]          ?? "",
+      address:        r.address        ?? r["Address"]        ?? "",
+      city:           r.city           ?? r["City"]           ?? "",
+      pickup_city:    r.pickup_city    ?? r["Pickup City"]    ?? "",
+      created_at:     r.created_at     ?? r["Created At"]     ?? "",
+      date_contacted: r.date_contacted ?? r["Contacted At"]   ?? "",
+      date_handover:  r.date_handover  ?? r["Handover At"]    ?? "",
+      model:          r.model          ?? r["Model"]          ?? "",
+      serial_number:  r.serial_number  ?? r["Serial Number"]  ?? "",
+      note:           r.note           ?? r["Note"]           ?? "",
     };
   }
 
@@ -173,8 +170,8 @@ function GalaxyTryHRPage() {
                     <td>{r.last_name ?? "-"}</td>
                     <td>{r.email ?? "-"}</td>
                     <td>{r.phone ?? "-"}</td>
-                    <td>{r.address ?? "-"}</td>
-                    <td>{r.city ?? "-"}</td>
+                    <td>{r.address || "-"}</td>
+                    <td>{r.city || "-"}</td>
                     <td>{r.pickup_city ?? "-"}</td>
                     <td>{fmtDateDMY(r.created_at)}</td>
                     <td>{fmtDateDMY(r.date_contacted)}</td>
