@@ -10,6 +10,8 @@ function GalaxyTryHRPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [showImport, setShowImport] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [editing, setEditing] = useState(null);
   const router = useRouter();
 
   // koji red editiramo
@@ -180,14 +182,53 @@ function GalaxyTryHRPage() {
                     <td>{r.model ?? "-"}</td>
                     <td>{r.serial_number ?? "-"}</td>
                     <td>{r.note ?? "-"}</td>
-                    <td>
-                      {/* Ovdje možeš staviti akcije (edit, save, itd.) */}
+                    <td className="p-2 whitespace-nowrap">
+                      <button
+                        className="px-2 py-1 rounded bg-blue-600 text-white mr-2"
+                        onClick={() => { setEditing(r); setShowEdit(true); }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="px-2 py-1 rounded bg-red-600 text-white"
+                        onClick={async () => {
+                          if (!confirm(`Obrisati zapis ${r.submission_id}?`)) return;
+                          try {
+                            const res = await fetch(`${API}/admin/galaxy-try/hr/${encodeURIComponent(r.submission_id)}`, {
+                              method: "DELETE",
+                              headers: { Authorization: `Bearer ${getToken()}` }
+                            });
+                            const data = await res.json().catch(()=> ({}));
+                            if (!res.ok) throw new Error(data?.error || "Delete failed");
+                            await load(); // osvježi listu nakon brisanja
+                          } catch (e) {
+                            alert(e.message);
+                          }
+                        }}
+                      >
+                        Delete
+                      </button>
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {showEdit && editing && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded shadow p-4 w-[720px] max-w-[95vw]">
+            <h3 className="font-semibold text-lg mb-3">
+              Edit — {editing.submission_id}
+            </h3>
+            <EditForm
+              initial={editing}
+              onCancel={() => { setShowEdit(false); setEditing(null); }}
+              onSaved={async () => { setShowEdit(false); setEditing(null); await load(); }}
+            />
+          </div>
         </div>
       )}
 
@@ -439,6 +480,86 @@ async function handleImportGalaxyCsv(e) {
     console.error(err);
     alert(`Greška pri importu: ${err.message}`);
   }
+}
+
+function EditForm({ initial, onCancel, onSaved }) {
+  const [form, setForm] = useState({
+    first_name:     initial.first_name || "",
+    last_name:      initial.last_name  || "",
+    email:          initial.email      || "",
+    phone:          initial.phone      || "",
+    address:        initial.address    || "",
+    city:           initial.city       || "",
+    pickup_city:    initial.pickup_city|| "",
+    date_contacted: initial.date_contacted || "",
+    date_handover:  initial.date_handover  || "",
+    model:          initial.model          || "",
+    serial_number:  initial.serial_number  || "",
+    note:           initial.note           || "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    try {
+      setSaving(true);
+      const res = await fetch(`${API}/admin/galaxy-try/hr/${encodeURIComponent(initial.submission_id)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`
+        },
+        body: JSON.stringify(form)
+      });
+      const data = await res.json().catch(()=> ({}));
+      if (!res.ok) throw new Error(data?.error || "Save failed");
+      await onSaved();
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const Field = ({name,label,type="text"}) => (
+    <label className="text-sm">
+      <div className="mb-1">{label}</div>
+      <input
+        type={type}
+        className="border rounded px-2 py-1 w-full"
+        value={form[name] ?? ""}
+        onChange={e => setForm(s => ({...s, [name]: e.target.value}))}
+      />
+    </label>
+  );
+
+  return (
+    <div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field name="first_name" label="First Name" />
+        <Field name="last_name"  label="Last Name" />
+        <Field name="email"      label="Email" />
+        <Field name="phone"      label="Phone" />
+        <Field name="address"    label="Address" />
+        <Field name="city"       label="City" />
+        <Field name="pickup_city"    label="Pickup City" />
+        <Field name="date_contacted" label="Contacted At" type="date" />
+        <Field name="date_handover"  label="Handover At"  type="date" />
+        <Field name="model"          label="Model" />
+        <Field name="serial_number"  label="Serial Number" />
+        <Field name="note"           label="Note" />
+      </div>
+      <div className="mt-4 flex justify-end gap-2">
+        <button className="px-3 py-1 border rounded" onClick={onCancel}>Cancel</button>
+        <button
+          className="px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
+          onClick={save}
+          disabled={saving}
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export default withAuth(GalaxyTryHRPage, { roles: ["COUNTRY_ADMIN", "SUPERADMIN"] });
