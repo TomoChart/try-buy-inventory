@@ -316,6 +316,7 @@ app.get('/admin/devices/:code/:serial',
 );
 
 // GALAXY TRY LISTA HR
+/*
 app.get('/admin/galaxy-try/hr/list',
   requireAuth, requireRole('country_admin','superadmin'),
   async (_req, res) => {
@@ -323,6 +324,7 @@ app.get('/admin/galaxy-try/hr/list',
     res.json(rows);
   }
 );
+*/
 // -------- PATCH: GALAXY TRY (edit po submission_id) ------------------------
 // PATCH /admin/galaxy-try/:code/:id
 // Body: { email?, phone?, pickup_city?, date_contacted?, date_handover?, model?, serial_number?, note? }
