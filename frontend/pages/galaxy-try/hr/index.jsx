@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef } from "react";
-  const fileRef = useRef(null);
 import withAuth from "../../../components/withAuth";
 import { API, getToken } from "../../../lib/auth";
 import CsvImportModal from "../../../components/CsvImportModal";
@@ -23,6 +22,8 @@ function GalaxyTryHRPage() {
   const [fSerial, setFSerial] = useState("");
   const [fContacted, setFContacted] = useState(""); // YYYY-MM-DD
   const [fHandover, setFHandover] = useState("");   // YYYY-MM-DD
+
+  const fileRef = useRef(null);
 
   // pomoćne
   function toDateOnly(v) {
@@ -105,8 +106,8 @@ function GalaxyTryHRPage() {
             accept=".csv"
             className="hidden"
             onChange={async (e) => {
-              await handleImportGalaxyCsv(e); // koristi postojeći handler iz ovog filea
-              await load();                   // odmah osvježi tablicu
+              await handleImportGalaxyCsv(e); // postojeći handler u istom fileu
+              await load();                   // refresha listu nakon importa
             }}
           />
           <button
