@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+  const fileRef = useRef(null);
 import withAuth from "../../../components/withAuth";
 import { API, getToken } from "../../../lib/auth";
 import CsvImportModal from "../../../components/CsvImportModal";
@@ -90,21 +91,31 @@ function GalaxyTryHRPage() {
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
-        <button
-          onClick={() => router.back()}
-          className="px-3 py-2 border rounded hover:bg-gray-50"
-        >
+        <button onClick={() => router.back()} className="px-3 py-2 border rounded hover:bg-gray-50">
           ← Back
         </button>
 
         <h1 className="text-xl font-bold">Galaxy Try — HR</h1>
 
-        <button
-          className="px-3 py-2 bg-blue-600 text-white rounded"
-          onClick={() => setShowImport(true)}
-        >
-          Import CSV
-        </button>
+        {/* Gumb koji otvara hidden file input */}
+        <div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv"
+            className="hidden"
+            onChange={async (e) => {
+              await handleImportGalaxyCsv(e); // koristi postojeći handler iz ovog filea
+              await load();                   // odmah osvježi tablicu
+            }}
+          />
+          <button
+            className="px-3 py-2 bg-blue-600 text-white rounded"
+            onClick={() => fileRef.current?.click()}
+          >
+            Import CSV
+          </button>
+        </div>
       </div>
 
       {loading ? <div>Učitavam…</div> : err ? <div className="text-red-600">{err}</div> : (
@@ -160,6 +171,7 @@ function GalaxyTryHRPage() {
         </div>
       )}
 
+      {/*
       {showImport && (
         <CsvImportModal
           onClose={() => { setShowImport(false); load(); }}
@@ -167,6 +179,7 @@ function GalaxyTryHRPage() {
           kind="leads"
         />
       )}
+      */}
     </div>
   );
 }
