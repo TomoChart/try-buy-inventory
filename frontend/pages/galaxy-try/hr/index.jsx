@@ -112,43 +112,49 @@ function GalaxyTryHRPage() {
           <table className="min-w-full text-sm">
             <thead className="bg-gray-100">
               <tr>
-            <th className="p-2 text-left">First Name</th>
-<th className="p-2 text-left">Last Name</th>
-<th className="p-2 text-left">Email</th>
-<th className="p-2 text-left">Phone</th>
-<th className="p-2 text-left">Pickup City</th>
-<th className="p-2 text-left">Created At</th>
-<th className="p-2 text-left">Contacted At</th>
-<th className="p-2 text-left">Handover At</th>
-    <th className="p-2 text-left">Model</th>
-    <th className="p-2 text-left">Serial Number</th> 
-        <th className="p-2 text-left">Actions</th>
+                <th className="p-2 text-left">First Name</th>
+                <th className="p-2 text-left">Last Name</th>
+                <th className="p-2 text-left">Email</th>
+                <th className="p-2 text-left">Phone</th>
+                <th className="p-2 text-left">Address</th>      {/* NOVO */}
+                <th className="p-2 text-left">City</th>         {/* NOVO */}
+                <th className="p-2 text-left">Pickup City</th>
+                <th className="p-2 text-left">Created At</th>
+                <th className="p-2 text-left">Contacted At</th>
+                <th className="p-2 text-left">Handover At</th>
+                <th className="p-2 text-left">Days left</th>    {/* NOVO */}
+                <th className="p-2 text-left">Model</th>
+                <th className="p-2 text-left">Serial Number</th>
+                <th className="p-2 text-left">Note</th>         {/* NOVO */}
+                <th className="p-2 text-left">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r, idx) => (
-                <EditableRow
-                  key={r.submission_id}
-                  row={r}
-                  onSave={async (updated) => {
-                    // PATCH na backend
-                    const res = await fetch(`${API}/admin/galaxy-try/hr/${r.submission_id}`, {
-                      method: "PATCH",
-                      headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${getToken()}`
-                      },
-                      body: JSON.stringify(updated)
-                    });
-                    if (res.ok) {
-                      // osvježi red u rows
-                      const newRows = [...rows];
-                      newRows[idx] = { ...r, ...updated };
-                      setRows(newRows);
-                    }
-                  }}
-                />
-              ))}
+              {rows.map((r) => {
+                const left = daysLeft(r.date_handover);
+                const leftStyle = (left === 0) ? { backgroundColor: "#fee2e2", color: "#991b1b", fontWeight: 600 } : {};
+                return (
+                  <tr key={r.submission_id}>
+                    <td>{r.first_name ?? "-"}</td>
+                    <td>{r.last_name ?? "-"}</td>
+                    <td>{r.email ?? "-"}</td>
+                    <td>{r.phone ?? "-"}</td>
+                    <td>{r.address ?? "-"}</td>
+                    <td>{r.city ?? "-"}</td>
+                    <td>{r.pickup_city ?? "-"}</td>
+                    <td>{fmtDateDMY(r.created_at)}</td>
+                    <td>{fmtDateDMY(r.date_contacted)}</td>
+                    <td>{fmtDateDMY(r.date_handover)}</td>
+                    <td style={leftStyle}>{left === "" ? "" : left}</td>
+                    <td>{r.model ?? "-"}</td>
+                    <td>{r.serial_number ?? "-"}</td>
+                    <td>{r.note ?? "-"}</td>
+                    <td>
+                      {/* Ovdje možeš staviti akcije (edit, save, itd.) */}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -158,11 +164,35 @@ function GalaxyTryHRPage() {
         <CsvImportModal
           onClose={() => { setShowImport(false); load(); }}
           countryCode="HR"
-          kind="leads"     // <-- za Galaxy Try
+          kind="leads"
         />
       )}
     </div>
   );
+}
+
+// dd-mm-yyyy prikaz
+function fmtDateDMY(value) {
+  if (!value) return "";
+  const d = new Date(value);
+  if (isNaN(d)) return String(value); // ako već dolazi u dobrom formatu
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+}
+
+// 14-dnevni countdown od date_handover
+function daysLeft(date_handover) {
+  if (!date_handover) return "";
+  const start = new Date(date_handover);
+  if (isNaN(start)) return "";
+  const today = new Date();
+  // normaliziraj na 00:00
+  start.setHours(0,0,0,0);
+  today.setHours(0,0,0,0);
+  const diffDays = Math.round((today - start) / (1000*60*60*24));
+  return 14 - diffDays; // ako je danas = handover → 14
 }
 
 function EditableRow({ row, onSave }) {
