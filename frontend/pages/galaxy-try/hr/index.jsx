@@ -3,7 +3,7 @@ import withAuth from "../../../components/withAuth";
 import { API, getToken } from "../../../lib/auth";
 import CsvImportModal from "../../../components/CsvImportModal";
 import { useRouter } from "next/router";
-import { TrashIcon } from "@heroicons/react/solid"; // Import TrashIcon
+import { TrashIcon } from "@heroicons/react/24/solid";
 
 function GalaxyTryHRPage() {
   const [rows, setRows] = useState([]);
