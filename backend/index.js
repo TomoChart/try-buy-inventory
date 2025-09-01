@@ -529,3 +529,104 @@ app.get('/admin/galaxy-try/:code/list',
         }
       }
     );
+
+// POST /admin/galaxy-try/:code/import?mode=upsert
+// Body: { rows: [ {submission_id, first_name, last_name, email, phone, address, city, postal_code, pickup_city, consent, created_at, date_contacted, date_handover, model, serial_number, note, form_name} ] }
+app.post(
+  "/admin/galaxy-try/:code/import",
+  requireAuth,
+  requireRole("country_admin", "superadmin"),
+  async (req, res) => {
+    try {
+      const country = String(req.params.code || "").toUpperCase();
+      const allowed = new Set(["HR", "SI", "RS"]);
+      if (!allowed.has(country)) {
+        return res.status(400).json({ error: "Invalid country code (HR/SI/RS)." });
+      }
+
+      const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+      if (!rows.length) return res.status(400).json({ error: "No rows." });
+
+      // Normalizacija + sanitizacija
+      const norm = rows
+        .map((r) => {
+          const val = (k) => (r[k] ?? null);
+          const toISOorNull = (v) => {
+            if (v == null || v === "") return null;
+            const d = new Date(v);
+            return isNaN(d.getTime()) ? null : d.toISOString();
+          };
+          return {
+            submission_id: val("submission_id"),
+            country_code: country,
+            first_name: val("first_name"),
+            last_name: val("last_name"),
+            email: val("email"),
+            phone: val("phone"),
+            address: val("address"),
+            city: val("city"),
+            postal_code: val("postal_code"),
+            pickup_city: val("pickup_city"),
+            consent: val("consent"),
+            created_at: val("created_at"),
+            date_contacted: toISOorNull(val("date_contacted")),
+            date_handover: toISOorNull(val("date_handover")),
+            model: val("model"),
+            serial_number: val("serial_number"),
+            note: val("note"),
+            form_name: val("form_name"),
+          };
+        })
+        .filter((r) => r.submission_id);
+
+      if (!norm.length) return res.status(400).json({ error: "No valid rows (submission_id missing)." });
+
+      // Bulk UPSERT u leads_import
+      const cols = [
+        "submission_id","country_code","first_name","last_name","email","phone",
+        "address","city","postal_code","pickup_city","consent","created_at",
+        "date_contacted","date_handover","model","serial_number","note","form_name"
+      ];
+
+      const allValues = [];
+      const tuples = [];
+      let i = 1;
+      for (const r of norm) {
+        const one = cols.map((c) => {
+          allValues.push(r[c] ?? null);
+          return `$${i++}`;
+        });
+        tuples.push(`(${one.join(",")})`);
+      }
+
+      const sql = `
+        INSERT INTO leads_import (${cols.join(",")})
+        VALUES ${tuples.join(",")}
+        ON CONFLICT (submission_id, country_code)
+        DO UPDATE SET
+          first_name   = COALESCE(EXCLUDED.first_name,   leads_import.first_name),
+          last_name    = COALESCE(EXCLUDED.last_name,    leads_import.last_name),
+          email        = COALESCE(EXCLUDED.email,        leads_import.email),
+          phone        = COALESCE(EXCLUDED.phone,        leads_import.phone),
+          address      = COALESCE(EXCLUDED.address,      leads_import.address),
+          city         = COALESCE(EXCLUDED.city,         leads_import.city),
+          postal_code  = COALESCE(EXCLUDED.postal_code,  leads_import.postal_code),
+          pickup_city  = COALESCE(EXCLUDED.pickup_city,  leads_import.pickup_city),
+          consent      = COALESCE(EXCLUDED.consent,      leads_import.consent),
+          created_at   = COALESCE(EXCLUDED.created_at,   leads_import.created_at),
+          date_contacted = COALESCE(EXCLUDED.date_contacted, leads_import.date_contacted),
+          date_handover  = COALESCE(EXCLUDED.date_handover,  leads_import.date_handover),
+          model        = COALESCE(EXCLUDED.model,        leads_import.model),
+          serial_number= COALESCE(EXCLUDED.serial_number,leads_import.serial_number),
+          note         = COALESCE(EXCLUDED.note,         leads_import.note),
+          form_name    = COALESCE(EXCLUDED.form_name,    leads_import.form_name)
+      `;
+      await prisma.$executeRawUnsafe(sql, ...allValues);
+
+      return res.json({ upserted: norm.length });
+    } catch (err) {
+      console.error("POST /admin/galaxy-try/:code/import error:", err);
+      return res.status(500).json({ error: "Server error." });
+    }
+  }
+);
