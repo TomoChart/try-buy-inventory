@@ -193,20 +193,7 @@ function GalaxyTrySIPage() {
                       </button>
                       <button
                         className="px-2 py-1 rounded bg-red-600 text-white"
-                        onClick={async () => {
-                          if (!confirm(`Obrisati zapis ${r.submission_id}?`)) return;
-                          try {
-                            const res = await fetch(`${API}/admin/galaxy-try/si/${encodeURIComponent(r.submission_id)}`, {
-                              method: "DELETE",
-                              headers: { Authorization: `Bearer ${getToken()}` }
-                            });
-                            const data = await res.json().catch(()=> ({}));
-                            if (!res.ok) throw new Error(data?.error || "Delete failed");
-                            await load(); // osvježi listu nakon brisanja
-                          } catch (e) {
-                            alert(e.message);
-                          }
-                        }}
+                        onClick={() => handleDelete(r.submission_id)}
                       >
                         Delete
                       </button>
