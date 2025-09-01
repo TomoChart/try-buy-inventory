@@ -1,20 +1,3 @@
-// GALAXY TRY LISTA SI
-app.get('/admin/galaxy-try/si/list',
-  requireAuth, requireRole('country_admin','superadmin'),
-  async (_req, res) => {
-    const rows = await prisma.$queryRaw`SELECT * FROM ui_galaxytry_si_list`;
-    res.json(rows);
-  }
-);
-
-// GALAXY TRY LISTA RS
-app.get('/admin/galaxy-try/rs/list',
-  requireAuth, requireRole('country_admin','superadmin'),
-  async (_req, res) => {
-    const rows = await prisma.$queryRaw`SELECT * FROM ui_galaxytry_rs_list`;
-    res.json(rows);
-  }
-);
 
 // Dozvoljena polja: first_name, last_name, email, phone, address, city,
 // pickup_city, date_contacted, date_handover, model, serial_number, note
@@ -784,32 +767,6 @@ app.get('/admin/galaxy-try/:code/list',
     } catch (err) {
       console.error('GT list error', err);
       return res.status(500).json({ error: 'Server error' });
-    }
-  }
-);
-// ===== GALAXY TRY: DELETE (po country code + submission_id) =====
-app.delete('/admin/galaxy-try/:code/:submission_id',
-  requireAuth, requireRole('country_admin','superadmin'),
-  async (req, res) => {
-    try {
-      const code = String(req.params.code || '').toUpperCase();
-      const sid  = String(req.params.submission_id || '');
-      if (!code || !sid) return res.status(400).json({ error: 'Missing code or submission_id' });
-
-      // brišemo točno jedan zapis iz leads_import
-      const sql = `
-        DELETE FROM leads_import
-        WHERE country_code = $1 AND submission_id = $2
-      `;
-      const result = await prisma.$executeRawUnsafe(sql, code, sid);
-
-      // result = broj obrisanih redova
-      if (!result) return res.status(404).json({ error: 'Not found' });
-
-      res.json({ ok: true, deleted: result });
-    } catch (e) {
-      console.error('DELETE galaxy-try failed', e);
-      res.status(500).json({ error: 'Server error' });
     }
   }
 );
