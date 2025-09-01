@@ -449,41 +449,38 @@ app.post('/admin/galaxy-try/:code',
   }
 );
 // DELETE /admin/galaxy-try/:code/:id
-app.delete('/admin/galaxy-try/:code/:id', requireAuth, requireRole('country_admin','superadmin'), async (req, res) => {
-  try {
-    const { code, id } = req.params;
+// Briše zapis iz leads_import po submission_id + country_code
+app.delete(
+  "/admin/galaxy-try/:code/:id",
+  requireAuth,
+  requireRole("country_admin", "superadmin"),
+  async (req, res) => {
+    try {
+      const code = String(req.params.code || "").toUpperCase(); // HR/SI/RS
+      const id = String(req.params.id || "");                   // submission_id (string/number)
 
-    // 1) Validacija code (HR, SI, RS)
-    const country = String(code || '').toUpperCase();
-    const allowed = new Set(['HR', 'SI', 'RS']);
-    if (!allowed.has(country)) {
-      return res.status(400).json({ error: 'Invalid country code (use HR, SI, or RS).' });
+      if (!code || !id) {
+        return res.status(400).json({ error: "Missing code or id" });
+      }
+
+      // Brišemo iz bazne tablice iz koje lista/viev vuče podatke
+      const sql = `
+        DELETE FROM leads_import
+        WHERE submission_id = $1 AND country_code = $2
+      `;
+      const affected = await prisma.$executeRawUnsafe(sql, id, code);
+
+      if (!affected) {
+        return res.status(404).json({ error: "Not found" });
+      }
+      return res.status(204).send(); // bez tijela
+    } catch (err) {
+      console.error("DELETE /admin/galaxy-try error:", err);
+      return res.status(500).json({ error: "Server error" });
     }
-
-    // 2) Validacija ID
-    const parsedId = Number(id);
-    if (!Number.isInteger(parsedId) || parsedId <= 0) {
-      return res.status(400).json({ error: 'Invalid id.' });
-    }
-
-    // 3) Brisanje
-    // ⚠️ PRILAGODI naziv Prisma modela i polja prema tvojoj shemi.
-    // Primjer pretpostavlja model "GalaxyTry" s poljem "id" i "countryCode".
-    const deleted = await prisma.galaxyTry.deleteMany({
-      where: { id: parsedId, countryCode: country },
-    });
-
-    if (deleted.count === 0) {
-      return res.status(404).json({ error: 'Not found.' });
-    }
-
-    // 4) Uspjeh — ne vraćamo tijelo, samo status
-    return res.status(204).send();
-  } catch (err) {
-    console.error('DELETE /admin/galaxy-try error:', err);
-    return res.status(500).json({ error: 'Server error.' });
   }
-});
+);
+
 
 
 // === GALAXY TRY: lista po country code (HR/SI/RS)
@@ -521,5 +518,10 @@ app.get('/admin/galaxy-try/:code/list',
         ORDER BY created_at DESC NULLS LAST, submission_id DESC
       `;
       const rows = await prisma.$queryRawUnsafe(sql, code);
-      return res.json(rows || []);
-    } catch
+          return res.json(rows || []);
+        } catch (err) {
+          console.error('GET /admin/galaxy-try/:code/list error', err);
+          return res.status(500).json({ error: 'Server error' });
+        }
+      }
+    );
