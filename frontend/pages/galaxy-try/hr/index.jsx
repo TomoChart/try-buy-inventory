@@ -656,31 +656,27 @@ function AddForm({ onCancel, onSaved }) {
 
 async function handleDelete(id) {
   if (!id) return;
+
   try {
     const res = await fetch(`${API}/admin/galaxy-try/hr/${encodeURIComponent(id)}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${getToken()}` },
     });
 
-    // Uspjeh: backend može vratiti 204 ili 200 → oboje tretiramo kao OK
-    if (res.ok) {
-      // Lokalno ukloni red bez ručnog refresh-a
-      setRows(prev => prev.filter(r => String(r.submission_id) !== String(id)));
+    if (!res.ok) {
+      // zapiši detalje u konzolu umjesto alert-a
+      const data = await res.json().catch(() => ({}));
+      console.error("Delete failed", res.status, data);
       return;
     }
 
-    // Neuspjeh: pokušaj pročitati poruku greške
-    let msg = "Delete error.";
-    try {
-      const j = await res.json();
-      if (j?.error) msg = j.error;
-    } catch { /* ignore */ }
-    alert(`${msg} (status ${res.status}).`);
-  } catch (e) {
-    console.error(e);
-    alert("Refresh after delete.");
+    // odmah ukloni red iz state-a (bez ručnog refresh-a)
+    setRows(prev => prev.filter(r => String(r.submission_id) !== String(id)));
+  } catch (err) {
+    console.error(err);
   }
 }
+
 
 
 export default withAuth(GalaxyTryHRPage, { roles: ["COUNTRY_ADMIN", "SUPERADMIN"] });
