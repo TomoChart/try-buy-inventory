@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/router";
 import { getToken, parseJwt, countryCodeById } from "../../lib/auth";
+import { TrashIcon } from "@heroicons/react/24/solid";
 
 export default function GalaxyTryIndex() {
   const router = useRouter();

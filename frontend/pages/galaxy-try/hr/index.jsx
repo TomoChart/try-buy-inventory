@@ -646,17 +646,28 @@ function AddForm({ onCancel, onSaved }) {
 }
 
 async function handleDelete(id) {
+  if (!id) return;
+  const sure = window.confirm("Obrisati ovaj zapis? Ova radnja je trajna.");
+  if (!sure) return;
+
   try {
-    const res = await fetch(`/api/devices/${id}`, {
-      method: 'DELETE',
+    const res = await fetch(`${API}/admin/galaxy-try/hr/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${getToken()}`
+      },
     });
-    if (res.ok) {
-      setRows(rows => rows.filter(r => r.id !== id));
+
+    if (res.status === 204) {
+      // u tvojoj tablici ključ je submission_id, pa filtriramo po njemu
+      setRows(rows => rows.filter(r => String(r.submission_id) !== String(id)));
     } else {
-      console.error("Greška kod brisanja");
+      const j = await res.json().catch(() => ({}));
+      alert(j?.error || `Greška pri brisanju (status ${res.status}).`);
     }
   } catch (err) {
     console.error(err);
+    alert("Dogodila se greška pri brisanju.");
   }
 }
 
