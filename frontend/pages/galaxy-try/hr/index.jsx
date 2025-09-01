@@ -3,7 +3,7 @@ import withAuth from "../../../components/withAuth";
 import { API, getToken } from "../../../lib/auth";
 import CsvImportModal from "../../../components/CsvImportModal";
 import { useRouter } from "next/router";
-
+import { TrashIcon } from "@heroicons/react/solid"; // Import TrashIcon
 
 function GalaxyTryHRPage() {
   const [rows, setRows] = useState([]);
@@ -195,7 +195,7 @@ function GalaxyTryHRPage() {
                         className="px-2 py-1 rounded bg-red-600 text-white"
                         onClick={() => handleDelete(r.submission_id)}
                       >
-                        Delete
+                        <TrashIcon className="w-5 h-5" />
                       </button>
                     </td>
                   </tr>
@@ -643,6 +643,21 @@ function AddForm({ onCancel, onSaved }) {
       </div>
     </div>
   );
+}
+
+async function handleDelete(id) {
+  try {
+    const res = await fetch(`/api/devices/${id}`, {
+      method: 'DELETE',
+    });
+    if (res.ok) {
+      setRows(rows => rows.filter(r => r.id !== id));
+    } else {
+      console.error("Greška kod brisanja");
+    }
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 export default withAuth(GalaxyTryHRPage, { roles: ["COUNTRY_ADMIN", "SUPERADMIN"] });
