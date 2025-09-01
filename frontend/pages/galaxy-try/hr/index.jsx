@@ -647,28 +647,31 @@ function AddForm({ onCancel, onSaved }) {
 
 async function handleDelete(id) {
   if (!id) return;
-  const sure = window.confirm("Obrisati ovaj zapis? Ova radnja je trajna.");
-  if (!sure) return;
-
   try {
     const res = await fetch(`${API}/admin/galaxy-try/hr/${encodeURIComponent(id)}`, {
       method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${getToken()}`
-      },
+      headers: { Authorization: `Bearer ${getToken()}` },
     });
 
-    if (res.status === 204) {
-      // u tvojoj tablici ključ je submission_id, pa filtriramo po njemu
-      setRows(rows => rows.filter(r => String(r.submission_id) !== String(id)));
-    } else {
-      const j = await res.json().catch(() => ({}));
-      alert(j?.error || `Greška pri brisanju (status ${res.status}).`);
+    // Uspjeh: backend može vratiti 204 ili 200 → oboje tretiramo kao OK
+    if (res.ok) {
+      // Lokalno ukloni red bez ručnog refresh-a
+      setRows(prev => prev.filter(r => String(r.submission_id) !== String(id)));
+      return;
     }
-  } catch (err) {
-    console.error(err);
-    alert("Dogodila se greška pri brisanju.");
+
+    // Neuspjeh: pokušaj pročitati poruku greške
+    let msg = "Delete error.";
+    try {
+      const j = await res.json();
+      if (j?.error) msg = j.error;
+    } catch { /* ignore */ }
+    alert(`${msg} (status ${res.status}).`);
+  } catch (e) {
+    console.error(e);
+    alert("Error with deleting.");
   }
 }
+
 
 export default withAuth(GalaxyTryHRPage, { roles: ["COUNTRY_ADMIN", "SUPERADMIN"] });
