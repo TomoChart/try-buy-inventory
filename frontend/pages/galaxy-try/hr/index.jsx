@@ -201,12 +201,10 @@ function GalaxyTryHRPage() {
                         Edit
                       </button>
                       <button
-                     onClick={() => handleDelete(row.submission_id)}
-  disabled={deletingId === row.submission_id}
-  className={`px-3 py-1 rounded border ${deletingId === row.submission_id ? "opacity-60 cursor-not-allowed" : "hover:bg-gray-100"}`}
-  title="Delete"
->
-  {deletingId === row.submission_id ? "Deleting…" : "Delete"}
+                     className="px-2 py-1 rounded bg-red-600 text-white"
+                        onClick={() => handleDelete(r.submission_id)}
+                      >
+                        <TrashIcon className="w-5 h-5" />
 </button>
                     </td>
                   </tr>
@@ -658,31 +656,31 @@ function AddForm({ onCancel, onSaved }) {
 
 async function handleDelete(id) {
   if (!id) return;
-
   try {
-    setDeletingId(id); // onemogući dupli klik na taj red
-
     const res = await fetch(`${API}/admin/galaxy-try/hr/${encodeURIComponent(id)}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${getToken()}` },
     });
 
-    if (!res.ok) {
-      // zapiši detalje u konzolu (bez alert-a)
-      const data = await res.json().catch(() => ({}));
-      console.error("Delete failed", res.status, data);
+    // Uspjeh: backend može vratiti 204 ili 200 → oboje tretiramo kao OK
+    if (res.ok) {
+      // Lokalno ukloni red bez ručnog refresh-a
+      setRows(prev => prev.filter(r => String(r.submission_id) !== String(id)));
       return;
     }
 
-    // odmah ukloni red iz state-a (bez ručnog refresha)
-    setRows(prev => prev.filter(r => String(r.submission_id) !== String(id)));
-  } catch (err) {
-    console.error(err);
-  } finally {
-    setDeletingId(null);
+    // Neuspjeh: pokušaj pročitati poruku greške
+    let msg = "Delete error.";
+    try {
+      const j = await res.json();
+      if (j?.error) msg = j.error;
+    } catch { /* ignore */ }
+    alert(`${msg} (status ${res.status}).`);
+  } catch (e) {
+    console.error(e);
+    alert("Refresh after delete.");
   }
 }
-
 
 
 export default withAuth(GalaxyTryHRPage, { roles: ["COUNTRY_ADMIN", "SUPERADMIN"] });
