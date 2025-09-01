@@ -130,13 +130,6 @@ function GalaxyTryHRPage() {
 
         <h1 className="text-xl font-bold">Galaxy Try — HR</h1>
 
-        {/* Toast prikaz */}
-        {flash && (
-          <div className="mb-3 inline-block rounded bg-gray-900 text-white px-3 py-2 text-sm shadow">
-            {flash}
-          </div>
-        )}
-
         {/* Gumb koji otvara hidden file input */}
         <div>
           <input
@@ -208,12 +201,10 @@ function GalaxyTryHRPage() {
                         Edit
                       </button>
                       <button
+                        className="px-2 py-1 rounded bg-red-600 text-white"
                         onClick={() => handleDelete(r.submission_id)}
-                        disabled={deletingId === r.submission_id}
-                        className={`px-3 py-1 rounded border ${deletingId === r.submission_id ? "opacity-60 cursor-not-allowed" : "hover:bg-gray-100"}`}
-                        title="Delete"
                       >
-                        {deletingId === r.submission_id ? "Deleting…" : "Delete"}
+                        <TrashIcon className="w-5 h-5" />
                       </button>
                     </td>
                   </tr>
@@ -665,33 +656,29 @@ function AddForm({ onCancel, onSaved }) {
 
 async function handleDelete(id) {
   if (!id) return;
-
   try {
-    setDeletingId(id); // spriječi dupli klik
-
     const res = await fetch(`${API}/admin/galaxy-try/hr/${encodeURIComponent(id)}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${getToken()}` },
     });
 
+    // Uspjeh: backend može vratiti 204 ili 200 → oboje tretiramo kao OK
     if (res.ok) {
+      // Lokalno ukloni red bez ručnog refresh-a
       setRows(prev => prev.filter(r => String(r.submission_id) !== String(id)));
-      toast("Record deleted.");
       return;
     }
 
-    // ako nije ok, pokušaj pročitati poruku, ali bez alert-a
-    let msg = `Delete error (status ${res.status}).`;
+    // Neuspjeh: pokušaj pročitati poruku greške
+    let msg = "Delete error.";
     try {
       const j = await res.json();
       if (j?.error) msg = j.error;
     } catch { /* ignore */ }
-    toast(msg);
+    alert(`${msg} (status ${res.status}).`);
   } catch (e) {
     console.error(e);
-    toast("Deleting error.");
-  } finally {
-    setDeletingId(null);
+    alert("Refresh after delete.");
   }
 }
 

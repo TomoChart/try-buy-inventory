@@ -450,36 +450,40 @@ app.post('/admin/galaxy-try/:code',
 );
 // DELETE /admin/galaxy-try/:code/:id
 // Briše zapis iz leads_import po submission_id + country_code
-app.delete(
-  "/admin/galaxy-try/:code/:id",
-  requireAuth,
-  requireRole("country_admin", "superadmin"),
-  async (req, res) => {
-    try {
-      const code = String(req.params.code || "").toUpperCase(); // HR/SI/RS
-      const id = String(req.params.id || "");                   // submission_id (string/number)
+app.delete('/admin/galaxy-try/:code/:id', requireAuth, requireRole('country_admin','superadmin'), async (req, res) => {
+  try {
+    const { code, id } = req.params;
 
-      if (!code || !id) {
-        return res.status(400).json({ error: "Missing code or id" });
-      }
-
-      // Brišemo iz bazne tablice iz koje lista/viev vuče podatke
-      const sql = `
-        DELETE FROM leads_import
-        WHERE submission_id = $1 AND country_code = $2
-      `;
-      const affected = await prisma.$executeRawUnsafe(sql, id, code);
-
-      if (!affected) {
-        return res.status(404).json({ error: "Not found" });
-      }
-      return res.status(204).send(); // bez tijela
-    } catch (err) {
-      console.error("DELETE /admin/galaxy-try error:", err);
-      return res.status(500).json({ error: "Server error" });
+    // 1) Validacija code (HR, SI, RS)
+    const country = String(code || '').toUpperCase();
+    const allowed = new Set(['HR', 'SI', 'RS']);
+    if (!allowed.has(country)) {
+      return res.status(400).json({ error: 'Invalid country code (use HR, SI, or RS).' });
     }
+
+    // 2) Validacija ID
+    const parsedId = Number(id);
+    if (!Number.isInteger(parsedId) || parsedId <= 0) {
+      return res.status(400).json({ error: 'Invalid id.' });
+    }
+
+    // 3) Brisanje (prilagodi ime modela/kolona ako treba)
+    const deleted = await prisma.galaxyTry.deleteMany({
+      where: { id: parsedId, countryCode: country },
+    });
+
+    if (deleted.count === 0) {
+      return res.status(404).json({ error: 'Not found.' });
+    }
+
+    // 4) Uspjeh — VRATI JSON (ne 204), da frontend ne puca na parsing
+    return res.status(200).json({ ok: true, id: parsedId, deleted: deleted.count });
+  } catch (err) {
+    console.error('DELETE /admin/galaxy-try error:', err);
+    return res.status(500).json({ error: 'Server error.' });
   }
-);
+});
+
 
 
 
