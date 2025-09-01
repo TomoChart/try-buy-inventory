@@ -16,6 +16,15 @@ function GalaxyTryHRPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [adding, setAdding] = useState(false);
 
+  // PRIDODAJ OVO NA VRH KOMPONENTE (uz ostale useState)
+  const [deletingId, setDeletingId] = useState(null);
+  const [flash, setFlash] = useState("");
+
+  function toast(msg) {
+    setFlash(msg);
+    setTimeout(() => setFlash(""), 2000); // makni poruku nakon 2s
+  }
+
   // koji red editiramo
   const [editingId, setEditingId] = useState(null);
   // lokalna polja za edit
@@ -669,7 +678,7 @@ async function handleDelete(id) {
     alert(`${msg} (status ${res.status}).`);
   } catch (e) {
     console.error(e);
-    alert("Error with deleting.");
+    alert("Refresh after delete.");
   }
 }
 
