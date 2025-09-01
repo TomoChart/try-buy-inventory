@@ -1,6 +1,7 @@
-// === GALAXY TRY: EDIT (PATCH) po submission_id i country code ===
+
 // Dozvoljena polja: first_name, last_name, email, phone, address, city,
 // pickup_city, date_contacted, date_handover, model, serial_number, note
+const crypto = require('crypto');
 app.patch('/admin/galaxy-try/:code/:submission_id',
   requireAuth, requireRole('country_admin','superadmin'),
   async (req, res) => {
@@ -67,6 +68,70 @@ app.patch('/admin/galaxy-try/:code/:submission_id',
   }
 );
 
+app.post('/admin/galaxy-try/:code',
+  requireAuth, requireRole('country_admin','superadmin'),
+  async (req, res) => {
+    try {
+      const code = String(req.params.code || '').toUpperCase();
+      if (!['HR','SI','RS'].includes(code)) {
+        return res.status(400).json({ error: 'Unknown country code' });
+      }
+
+      // Dozvoljena polja koja možemo upisati
+      const ALLOWED = new Set([
+        'first_name','last_name','email','phone',
+        'address','city','pickup_city',
+        'date_contacted','date_handover',
+        'model','serial_number','note'
+      ]);
+
+      const b = req.body || {};
+      const payload = {};
+      for (const [k,v] of Object.entries(b)) {
+        if (ALLOWED.has(k)) payload[k] = v ?? null;
+      }
+
+      // submission_id generiramo ako nije poslan
+      const submission_id = String(b.submission_id || crypto.randomUUID());
+
+      // normalizacija datuma (ako su došli kao "YYYY-MM-DD")
+      if (payload.date_contacted) payload.date_contacted = new Date(payload.date_contacted);
+      if (payload.date_handover)  payload.date_handover  = new Date(payload.date_handover);
+
+      const cols = ['submission_id','country_code', ...Object.keys(payload)];
+      const vals = [submission_id, code, ...Object.values(payload)];
+      const placeholders = cols.map((_,i)=>`$${i+1}`).join(', ');
+
+      const sql = `
+        INSERT INTO leads_import (${cols.map(c=>`"${c}"`).join(', ')})
+        VALUES (${placeholders})
+        ON CONFLICT (submission_id) DO UPDATE
+        SET ${Object.keys(payload).map((c,i)=>`"${c}" = EXCLUDED."${c}"`).join(', ')},
+            updated_at = NOW()
+        RETURNING
+          submission_id        AS submission_id,
+          first_name           AS first_name,
+          last_name            AS last_name,
+          email                AS email,
+          phone                AS phone,
+          address              AS address,
+          city                 AS city,
+          pickup_city          AS pickup_city,
+          created_at           AS created_at,
+          date_contacted       AS date_contacted,
+          date_handover        AS date_handover,
+          model                AS model,
+          serial_number        AS serial_number,
+          note                 AS note
+      `;
+      const rows = await prisma.$queryRawUnsafe(sql, ...vals);
+      return res.json({ ok: true, item: rows[0] });
+    } catch (err) {
+      console.error('GT create error', err);
+      return res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
 // === GALAXY TRY: DELETE po submission_id i country code ===
 app.delete('/admin/galaxy-try/:code/:submission_id',
   requireAuth, requireRole('country_admin','superadmin'),
@@ -371,22 +436,24 @@ app.patch(
         SET
           email = COALESCE($1, email),
           phone = COALESCE($2, phone),
-          pickup_city = COALESCE($3, pickup_city),
-          date_contacted = COALESCE($4, date_contacted),
-          date_handover = COALESCE($5, date_handover),
-          model = COALESCE($6, model),
-          serial_number = COALESCE($7, serial_number),
-          note = COALESCE($8, note)
-        WHERE submission_id = $9 AND country_code = $10
+          address = COALESCE($3, address),
+          city = COALESCE($4, city),
+          pickup_city = COALESCE($5, pickup_city),
+          date_contacted = COALESCE($6, date_contacted),
+          date_handover = COALESCE($7, date_handover),
+          model = COALESCE($8, model),
+          serial_number = COALESCE($9, serial_number),
+          note = COALESCE($10, note)
+        WHERE submission_id = $11 AND country_code = $12
         RETURNING
-          submission_id,
-          email, phone, pickup_city, date_contacted, date_handover,
-          model, serial_number, note
+          submission_id, email, phone, address, city, pickup_city, date_contacted, date_handover, model, serial_number, note
       `;
 
       const vals = [
         payload.email ?? null,
         payload.phone ?? null,
+        payload.address ?? null,
+        payload.city ?? null,
         payload.pickup_city ?? null,
         payload.date_contacted ?? null,
         payload.date_handover ?? null,
