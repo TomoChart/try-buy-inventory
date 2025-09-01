@@ -207,8 +207,7 @@ function GalaxyTryHRPage() {
   title="Delete"
 >
   {deletingId === row.submission_id ? "Deleting…" : "Delete"}
-                        <TrashIcon className="w-5 h-5" />
-                      </button>
+</button>
                     </td>
                   </tr>
                 );
