@@ -13,6 +13,8 @@ function GalaxyTryHRPage() {
   const [showEdit, setShowEdit] = useState(false);
   const [editing, setEditing] = useState(null);
   const router = useRouter();
+  const [showAdd, setShowAdd] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   // koji red editiramo
   const [editingId, setEditingId] = useState(null);
@@ -227,6 +229,27 @@ function GalaxyTryHRPage() {
               initial={editing}
               onCancel={() => { setShowEdit(false); setEditing(null); }}
               onSaved={async () => { setShowEdit(false); setEditing(null); await load(); }}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="mb-3 flex items-center gap-2">
+        <button
+          className="px-3 py-1 rounded bg-green-600 text-white"
+          onClick={() => setShowAdd(true)}
+        >
+          + Add
+        </button>
+      </div>
+
+      {showAdd && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded shadow p-4 w-[720px] max-w-[95vw]">
+            <h3 className="font-semibold text-lg mb-3">Add new — HR</h3>
+            <AddForm
+              onCancel={() => setShowAdd(false)}
+              onSaved={async () => { setShowAdd(false); await load(); }}
             />
           </div>
         </div>
@@ -548,6 +571,79 @@ function EditForm({ initial, onCancel, onSaved }) {
         <Field name="serial_number"  label="Serial Number" />
         <Field name="note"           label="Note" />
       </div>
+      <div className="mt-4 flex justify-end gap-2">
+        <button className="px-3 py-1 border rounded" onClick={onCancel}>Cancel</button>
+        <button
+          className="px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
+          onClick={save}
+          disabled={saving}
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AddForm({ onCancel, onSaved }) {
+  const [form, setForm] = useState({
+    first_name: "", last_name: "", email: "", phone: "",
+    address: "", city: "", pickup_city: "",
+    date_contacted: "", date_handover: "",
+    model: "", serial_number: "", note: ""
+  });
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    try {
+      setSaving(true);
+      const res = await fetch(`${API}/admin/galaxy-try/hr`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getToken()}`
+        },
+        body: JSON.stringify(form)
+      });
+      const data = await res.json().catch(()=> ({}));
+      if (!res.ok) throw new Error(data?.error || "Create failed");
+      await onSaved();
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const Field = ({name,label,type="text"}) => (
+    <label className="text-sm">
+      <div className="mb-1">{label}</div>
+      <input
+        type={type}
+        className="border rounded px-2 py-1 w-full"
+        value={form[name] ?? ""}
+        onChange={e => setForm(s => ({...s, [name]: e.target.value}))}
+      />
+    </label>
+  );
+
+  return (
+    <div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field name="first_name" label="First Name" />
+        <Field name="last_name"  label="Last Name" />
+        <Field name="email"      label="Email" />
+        <Field name="phone"      label="Phone" />
+        <Field name="address"    label="Address" />
+        <Field name="city"       label="City" />
+        <Field name="pickup_city"    label="Pickup City" />
+        <Field name="date_contacted" label="Contacted At" type="date" />
+        <Field name="date_handover"  label="Handover At"  type="date" />
+        <Field name="model"          label="Model" />
+        <Field name="serial_number"  label="Serial Number" />
+        <Field name="note"           label="Note" />
+      </div>
+
       <div className="mt-4 flex justify-end gap-2">
         <button className="px-3 py-1 border rounded" onClick={onCancel}>Cancel</button>
         <button
