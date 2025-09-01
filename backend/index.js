@@ -232,90 +232,7 @@ app.get('/admin/galaxy-try/hr/list',
 );
 */
 
-// -------- PATCH: GALAXY TRY (edit po submission_id) ------------------------
-// PATCH /admin/galaxy-try/:code/:id
-// Body: { email?, phone?, pickup_city?, date_contacted?, date_handover?, model?, serial_number?, note? }
-app.patch(
-  "/admin/galaxy-try/:code/:id",
-  requireAuth,
-  requireRole("country_admin", "superadmin"),
-  async (req, res) => {
-    try {
-      const code = String(req.params.code || "").toUpperCase();
-      const id = String(req.params.id || "");
-
-      if (!code || !id) return res.status(400).json({ error: "Missing code or id" });
-
-      // dozvoljena polja za edit
-      const allowed = [
-        "email",
-        "phone",
-        "pickup_city",
-        "date_contacted",
-        "date_handover",
-        "model",
-        "serial_number",
-        "note",
-      ];
-
-      const payload = {};
-      for (const k of allowed) {
-        if (k in req.body) payload[k] = req.body[k];
-      }
-      if (!Object.keys(payload).length) {
-        return res.status(400).json({ error: "No editable fields provided" });
-      }
-
-      // jednostavne validacije (po potrebi proširi)
-      const isoOrNull = (v) =>
-        v == null || v === "" ? null : new Date(v).toString() !== "Invalid Date" ? v : null;
-      if ("date_contacted" in payload) payload.date_contacted = isoOrNull(payload.date_contacted);
-      if ("date_handover" in payload) payload.date_handover = isoOrNull(payload.date_handover);
-
-      // update preko submission_id i country_code
-      const sql = `
-        UPDATE leads_import
-        SET
-          email = COALESCE($1, email),
-          phone = COALESCE($2, phone),
-          address = COALESCE($3, address),
-          city = COALESCE($4, city),
-          pickup_city = COALESCE($5, pickup_city),
-          date_contacted = COALESCE($6, date_contacted),
-          date_handover = COALESCE($7, date_handover),
-          model = COALESCE($8, model),
-          serial_number = COALESCE($9, serial_number),
-          note = COALESCE($10, note)
-        WHERE submission_id = $11 AND country_code = $12
-        RETURNING
-          submission_id, email, phone, address, city, pickup_city, date_contacted, date_handover, model, serial_number, note
-      `;
-
-      const vals = [
-        payload.email ?? null,
-        payload.phone ?? null,
-        payload.address ?? null,
-        payload.city ?? null,
-        payload.pickup_city ?? null,
-        payload.date_contacted ?? null,
-        payload.date_handover ?? null,
-        payload.model ?? null,
-        payload.serial_number ?? null,
-        payload.note ?? null,
-        id,
-        code,
-      ];
-
-      const rows = await prisma.$queryRawUnsafe(sql, ...vals);
-      if (!rows.length) return res.status(404).json({ error: "Not found" });
-
-      return res.json({ ok: true, updated: rows[0] });
-    } catch (e) {
-      console.error("PATCH galaxy-try error", e);
-      return res.status(500).json({ error: "Update failed" });
-    }
-  }
-);
+// ...existing code...
 
 // === GALAXY TRY: EDIT (PATCH) po submission_id i country code ===
 app.patch('/admin/galaxy-try/:code/:submission_id',
@@ -448,41 +365,31 @@ app.post('/admin/galaxy-try/:code',
     }
   }
 );
-// DELETE /admin/galaxy-try/:code/:id
-// Briše zapis iz leads_import po submission_id + country_code
-app.delete('/admin/galaxy-try/:code/:id', requireAuth, requireRole('country_admin','superadmin'), async (req, res) => {
-  try {
-    const { code, id } = req.params;
+// === GALAXY TRY: DELETE po submission_id i country code ===
+app.delete('/admin/galaxy-try/:code/:submission_id',
+  requireAuth, requireRole('country_admin','superadmin'),
+  async (req, res) => {
+    try {
+      const code = String(req.params.code || '').toUpperCase();
+      const sid  = String(req.params.submission_id || '');
+      if (!['HR','SI','RS'].includes(code) || !sid) {
+        return res.status(400).json({ error: 'Bad request' });
+      }
 
-    // 1) Validacija code (HR, SI, RS)
-    const country = String(code || '').toUpperCase();
-    const allowed = new Set(['HR', 'SI', 'RS']);
-    if (!allowed.has(country)) {
-      return res.status(400).json({ error: 'Invalid country code (use HR, SI, or RS).' });
+      const sql = `
+        DELETE FROM leads_import
+        WHERE submission_id = $1 AND country_code = $2
+        RETURNING submission_id
+      `;
+      const rows = await prisma.$queryRawUnsafe(sql, sid, code);
+      if (!rows.length) return res.status(404).json({ error: 'Not found' });
+      return res.json({ ok: true, deleted: sid });
+    } catch (err) {
+      console.error('GT delete error', err);
+      return res.status(500).json({ error: 'Server error' });
     }
-
-    // 2) Validacija ID
-    const parsedId = Number(id);
-    if (!Number.isInteger(parsedId) || parsedId <= 0) {
-      return res.status(400).json({ error: 'Invalid id.' });
-    }
-
-    // 3) Brisanje (prilagodi ime modela/kolona ako treba)
-    const deleted = await prisma.galaxyTry.deleteMany({
-      where: { id: parsedId, countryCode: country },
-    });
-
-    if (deleted.count === 0) {
-      return res.status(404).json({ error: 'Not found.' });
-    }
-
-    // 4) Uspjeh — VRATI JSON (ne 204), da frontend ne puca na parsing
-    return res.status(200).json({ ok: true, id: parsedId, deleted: deleted.count });
-  } catch (err) {
-    console.error('DELETE /admin/galaxy-try error:', err);
-    return res.status(500).json({ error: 'Server error.' });
   }
-});
+);
 
 
 
