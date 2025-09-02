@@ -112,37 +112,31 @@ function GalaxyTryHRPage() {
 
   useEffect(() => { load(); }, []);
 
-  // ⬇️ Dodaj/zalijepi unutar komponente (iznad return-a)
-  async function handleDelete(submissionId) {
-    if (!submissionId) return;
-    if (!confirm('Sigurno želiš obrisati ovaj zapis?')) return;
+  // === DELETE (koristi isti token helper kao i ostale pozive) ===
+async function handleDelete(id) {
+  if (!id) return;
+  if (!confirm('Sigurno želiš obrisati ovaj zapis?')) return;
 
-    try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-      const apiBase = process.env.NEXT_PUBLIC_API_BASE || 'https://api.try-buy-inv.net';
+  try {
+    const res = await fetch(`${API}/admin/galaxy-try/hr/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
 
-      const res = await fetch(
-        `${apiBase}/admin/galaxy-try/HR/${encodeURIComponent(submissionId)}`,
-        {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-
-      if (!res.ok) {
-        const msg = await res.text().catch(() => '');
-        alert(`Greška pri brisanju: ${res.status} ${msg || ''}`);
-        return;
-      }
-
-      // ✅ Optimistički update liste (bez ručnog refresh-a)
-      setRows(prev => prev.filter(r => r.submission_id !== submissionId));
-    } catch (err) {
-      console.error(err);
-      alert('Greška pri brisanju (network).');
+    // backend vraća JSON { ok:true, deleted: ... }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(`Greška pri brisanju: ${res.status} ${data?.error ? `(${data.error})` : ''}`);
+      return;
     }
-  }
 
+    // makni red iz liste bez refresh-a
+    setRows(prev => prev.filter(r => (r.submission_id ?? r['Submission ID']) !== id));
+  } catch (err) {
+    console.error(err);
+    alert('Greška pri brisanju (network).');
+  }
+}
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
