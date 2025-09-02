@@ -522,4 +522,9 @@ app.get('/admin/galaxy-try/:code/list',
       `;
       const rows = await prisma.$queryRawUnsafe(sql, code);
       return res.json(rows || []);
-    } catch
+        } catch (err) {
+          console.error('GET /admin/galaxy-try/:code/list error', err);
+          return res.status(500).json({ error: 'Server error' });
+        }
+      }
+    );
