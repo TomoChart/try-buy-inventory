@@ -3,7 +3,7 @@ import withAuth from "../../../components/withAuth";
 import { API, getToken } from "../../../lib/auth";
 import CsvImportModal from "../../../components/CsvImportModal";
 import { useRouter } from "next/router";
-import { TrashIcon } from "@heroicons/react/24/solid";
+
 
 function GalaxyTryHRPage() {
   const [rows, setRows] = useState([]);
@@ -15,15 +15,6 @@ function GalaxyTryHRPage() {
   const router = useRouter();
   const [showAdd, setShowAdd] = useState(false);
   const [adding, setAdding] = useState(false);
-
-  // PRIDODAJ OVO NA VRH KOMPONENTE (uz ostale useState)
-  const [deletingId, setDeletingId] = useState(null);
-  const [flash, setFlash] = useState("");
-
-  function toast(msg) {
-    setFlash(msg);
-    setTimeout(() => setFlash(""), 2000); // makni poruku nakon 2s
-  }
 
   // koji red editiramo
   const [editingId, setEditingId] = useState(null);
@@ -201,11 +192,11 @@ function GalaxyTryHRPage() {
                         Edit
                       </button>
                       <button
-                     className="px-2 py-1 rounded bg-red-600 text-white"
+                        className="px-2 py-1 rounded bg-red-600 text-white"
                         onClick={() => handleDelete(r.submission_id)}
                       >
-                        <TrashIcon className="w-5 h-5" />
-</button>
+                        Delete
+                      </button>
                     </td>
                   </tr>
                 );
@@ -653,34 +644,5 @@ function AddForm({ onCancel, onSaved }) {
     </div>
   );
 }
-
-async function handleDelete(id) {
-  if (!id) return;
-  try {
-    const res = await fetch(`${API}/admin/galaxy-try/hr/${encodeURIComponent(id)}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${getToken()}` },
-    });
-
-    // Uspjeh: backend može vratiti 204 ili 200 → oboje tretiramo kao OK
-    if (res.ok) {
-      // Lokalno ukloni red bez ručnog refresh-a
-      setRows(prev => prev.filter(r => String(r.submission_id) !== String(id)));
-      return;
-    }
-
-    // Neuspjeh: pokušaj pročitati poruku greške
-    let msg = "Delete error.";
-    try {
-      const j = await res.json();
-      if (j?.error) msg = j.error;
-    } catch { /* ignore */ }
-    alert(`${msg} (status ${res.status}).`);
-  } catch (e) {
-    console.error(e);
-    alert("Refresh after delete.");
-  }
-}
-
 
 export default withAuth(GalaxyTryHRPage, { roles: ["COUNTRY_ADMIN", "SUPERADMIN"] });
