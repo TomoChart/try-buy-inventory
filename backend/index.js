@@ -12,21 +12,32 @@ const app = express();
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// 2) CORS
-const allowed = process.env.CORS_ORIGINS
-  ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
-  : [];
+// ---- CORS ----
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
 
-app.use(cors({
+// Fallback ako .env nije podešen
+if (ALLOWED_ORIGINS.length === 0) {
+  ALLOWED_ORIGINS.push('https://try-buy-inventory.vercel.app', 'http://localhost:3000');
+}
+
+const corsOptions = {
   origin(origin, cb) {
-    console.log('CORS_ORIGINS:', allowed, 'Origin:', origin);
-    if (!origin || allowed.includes(origin)) return cb(null, true);
-    return cb(new Error('CORS not allowed'), false);
+    // Dopusti alate bez Origin headera (curl/Postman)
+    if (!origin) return cb(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    return cb(new Error('CORS blocked'), false);
   },
-  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization'],
-}));
-app.options('*', cors());
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  optionsSuccessStatus: 204,
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // preflight
 
 // 3) prisma, helpers, auth middleware
 const prisma = new PrismaClient();
@@ -528,3 +539,105 @@ app.get('/admin/galaxy-try/:code/list',
         }
       }
     );
+
+// === GALAXY TRY: CSV IMPORT (delete+insert per row) =========================
+// Prima JSON: { rows: [ { submission_id, first_name, last_name, email, phone,
+//   address, city, postal_code, pickup_city, consent, created_at,
+//   date_contacted, date_handover, model, serial_number, note, form_name } ] }
+app.post(
+  "/admin/galaxy-try/:code/import",
+  requireAuth,
+  requireRole("country_admin", "superadmin"),
+  async (req, res) => {
+    try {
+      const country = String(req.params.code || "").toUpperCase();
+      if (!["HR", "SI", "RS"].includes(country)) {
+        return res.status(400).json({ error: "Invalid country code (HR/SI/RS)." });
+      }
+
+      const srcRows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+      if (!srcRows.length) return res.status(400).json({ error: "No rows." });
+
+      const toNull = (v) => (v === "" || v === undefined ? null : v);
+      const toISO = (v) => {
+        if (v == null || v === "") return null;
+        const d = new Date(v);
+        return isNaN(d) ? null : d.toISOString();
+      };
+
+      let inserted = 0;
+
+      // Jednostavan i robustan pristup: za svaki submission_id obriši pa upiši
+      for (const r of srcRows) {
+        const sid = String(r.submission_id || "").trim();
+        if (!sid) continue; // obavezno
+
+        // normalizacija polja (prazno -> null, datumi -> ISO)
+        const row = {
+          submission_id: sid,
+          country_code: country,
+          first_name: toNull(r.first_name),
+          last_name: toNull(r.last_name),
+          email: toNull(r.email),
+          phone: toNull(r.phone),
+          address: toNull(r.address),
+          city: toNull(r.city),
+          postal_code: toNull(r.postal_code),
+          pickup_city: toNull(r.pickup_city),
+          consent: toNull(r.consent),
+          created_at: toISO(r.created_at) || toNull(r.created_at), // prihvati i već-ISO
+          date_contacted: toISO(r.date_contacted),
+          date_handover: toISO(r.date_handover),
+          model: toNull(r.model),
+          serial_number: toNull(r.serial_number),
+          note: toNull(r.note),
+          form_name: toNull(r.form_name),
+        };
+
+        // 1) DELETE postojeće (ako postoji taj submission_id u toj zemlji)
+        await prisma.$executeRawUnsafe(
+          `DELETE FROM leads_import WHERE submission_id = $1 AND country_code = $2`,
+          row.submission_id,
+          row.country_code
+        );
+
+        // 2) INSERT novi zapis
+        await prisma.$executeRawUnsafe(
+          `
+          INSERT INTO leads_import
+            ("submission_id","country_code","first_name","last_name","email","phone",
+             "address","city","postal_code","pickup_city","consent","created_at",
+             "date_contacted","date_handover","model","serial_number","note","form_name")
+          VALUES
+            ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+          `,
+          row.submission_id,
+          row.country_code,
+          row.first_name,
+          row.last_name,
+          row.email,
+          row.phone,
+          row.address,
+          row.city,
+          row.postal_code,
+          row.pickup_city,
+          row.consent,
+          row.created_at,
+          row.date_contacted,
+          row.date_handover,
+          row.model,
+          row.serial_number,
+          row.note,
+          row.form_name
+        );
+
+        inserted++;
+      }
+
+      return res.json({ ok: true, inserted });
+    } catch (err) {
+      console.error("POST /admin/galaxy-try/:code/import error", err);
+      return res.status(500).json({ error: "Server error" });
+    }
+  }
+);
