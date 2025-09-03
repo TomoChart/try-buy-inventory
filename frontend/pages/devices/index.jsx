@@ -49,32 +49,15 @@ function DevicesPage() {
       try {
         const token = getToken();
         const u = parseJwt(token) || {};
-        let c = (router.query.country || code || 'HR').toString().toUpperCase();
-
-        // ako korisnik ima countryId u tokenu – probaj dohvatiti code iz backenda
-        if (!c && u.countryId) {
-          c = (await countryCodeById(u.countryId, token)) || "";
-        }
-
-        // ✅ Fallback: ako još nema koda, koristi HR
-        if (!c) {
-          c = "HR";
-        }
-
-        // ako želiš, možeš zadržati redirect za superadmina na posebnu stranicu:
-        // if (String(u.role || "").toUpperCase() === "SUPERADMIN" && !router.query.country) {
-        //   router.replace("/select-country"); 
-        //   return;
-        // }
-
+        let c = String(router.query.country || "").toUpperCase();
+        if (!c && u.countryId) c = (await countryCodeById(u.countryId, token)) || "";
+        if (!c && String(u.role || "").toUpperCase() === "SUPERADMIN") { router.replace("/select-country"); return; }
+        if (!c) throw new Error("Nije moguće odrediti državu.");
         setCode(c);
-        const res = await fetch(
-          `${API}/admin/devices/${c.toLowerCase()}/list`,
-          { headers: { Authorization: `Bearer ${getToken()}` } }
-        );
-        const data = await res.json().catch(() => null);
-        if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-        setRows(Array.isArray(data) ? data : []);
+        const r = await fetch(`${API}/admin/devices/${c.toLowerCase()}/list`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!r.ok) throw new Error("Greška pri dohvaćanju.");
+        const data = await r.json();
+        if (!cancelled) setRows(data || []);
       } catch (e) {
         if (!cancelled) setErr("Ne mogu dohvatiti uređaje.");
       } finally {
