@@ -92,7 +92,7 @@ module.exports = router;
 
 // --- DEV RESET PASSWORD FLOW ---
 
-// 1. Generiraj novu random lozinku, postavi je korisniku i vrati je u responseu (bez emaila, bez tokena)
+// 1. Generiraj novu random lozinku, postavi je u i vrati je u responseu (bez emaila, bez tokena)
 router.post('/auth/dev-reset-request', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email required' });

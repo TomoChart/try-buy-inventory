@@ -117,7 +117,7 @@ export default function CsvImportModal({ onClose, countryCode = "HR", kind = "de
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl shadow p-5 w-[720px] max-w-[98vw]">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold">CSV import — {kind === "devices" ? "Uređaji" : "Galaxy Try"} ({countryCode})</h2>
+          <h2 className="text-lg font-semibold">CSV import — {kind === "devices" ? "Devices" : "Galaxy Try"} ({countryCode})</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-black">&times;</button>
         </div>
 

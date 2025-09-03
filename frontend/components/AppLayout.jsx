@@ -44,13 +44,13 @@ export default function AppLayout({ children }) {
           <NavLink href={withCode("/dashboard")} active={p.includes("/dashboard")}>Dashboard</NavLink>
           <NavLink href={withCode("/galaxy-try")} active={p.includes("/galaxy-try")}>Galaxy Try (Fold7)</NavLink>
           <NavLink href={withCode("/try-and-buy")} active={p.includes("/try-and-buy")}>Try_and_Buy</NavLink>
-          <NavLink href={withCode("/devices")} active={p.includes("/devices")}>Uređaji</NavLink>
+          <NavLink href={withCode("/devices")} active={p.includes("/devices")}>Devices</NavLink>
         </div>
 
         <div className="mt-6">
           <div className="text-xs uppercase tracking-wide text-slate-500 mb-2 pl-1">Admin</div>
-          <NavLink href="/admin/users" active={p.startsWith("/admin/users")}>Korisnici</NavLink>
-          <NavLink href="/settings" active={p.startsWith("/settings")}>Postavke</NavLink>
+          <NavLink href="/admin/users" active={p.startsWith("/admin/users")}>Users</NavLink>
+          <NavLink href="/settings" active={p.startsWith("/settings")}>Settings</NavLink>
         </div>
       </aside>
 

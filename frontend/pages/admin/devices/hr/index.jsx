@@ -19,7 +19,7 @@ function DevicesHRPage() {
         const data = await r.json();
         setRows(data || []);
       } catch (e) {
-        setErr("Ne mogu dohvatiti uređaje.");
+        setErr("Can't fetch devices. Call Tomo.");
       } finally {
         setLoading(false);
       }
