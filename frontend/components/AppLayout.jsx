@@ -47,12 +47,6 @@ export default function AppLayout({ children }) {
           <NavLink href={withCode("/devices")} active={p.includes("/devices")}>Uređaji</NavLink>
         </div>
 
-
-        <div className="mt-6">
-          <div className="text-xs uppercase tracking-wide text-slate-500 mb-2 pl-1">BTL</div>
-          <NavLink href={withCode("/btl")} active={p.includes("/btl")}>BTL evidencija</NavLink>
-        </div>
-
         <div className="mt-6">
           <div className="text-xs uppercase tracking-wide text-slate-500 mb-2 pl-1">Admin</div>
           <NavLink href="/admin/users" active={p.startsWith("/admin/users")}>Korisnici</NavLink>

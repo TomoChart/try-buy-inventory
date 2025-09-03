@@ -45,7 +45,7 @@ export default function AdminPanel({
 
       <main className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <section className="bg-white rounded-2xl shadow p-5">
-          <h2 className="text-xl font-semibold mb-4">Korisnici</h2>
+          <h2 className="text-xl font-semibold mb-4">Users</h2>
           <UsersTable
             token={token}
             baseUrl={baseUrl}
@@ -54,14 +54,6 @@ export default function AdminPanel({
           />
         </section>
 
-        <section className="bg-white rounded-2xl shadow p-5">
-          <h2 className="text-xl font-semibold mb-4">BTL evidencija (Uređaji)</h2>
-          <DevicesTable
-            token={token}
-            baseUrl={baseUrl}
-            selectedCountry={selectedCountry}
-          />
-        </section>
       </main>
     </div>
   );
