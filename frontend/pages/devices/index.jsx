@@ -49,7 +49,7 @@ function DevicesPage() {
       try {
         const token = getToken();
         const u = parseJwt(token) || {};
-        let c = String(router.query.country || "").toUpperCase();
+        let c = (router.query.country || code || 'HR').toString().toUpperCase();
 
         // ako korisnik ima countryId u tokenu – probaj dohvatiti code iz backenda
         if (!c && u.countryId) {
@@ -68,10 +68,13 @@ function DevicesPage() {
         // }
 
         setCode(c);
-        const r = await fetch(`${API}/admin/devices/${c.toLowerCase()}/list`, { headers: { Authorization: `Bearer ${token}` } });
-        if (!r.ok) throw new Error("Greška pri dohvaćanju.");
-        const data = await r.json();
-        if (!cancelled) setRows(data || []);
+        const res = await fetch(
+          `${API}/admin/devices/${c.toLowerCase()}/list`,
+          { headers: { Authorization: `Bearer ${getToken()}` } }
+        );
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+        setRows(Array.isArray(data) ? data : []);
       } catch (e) {
         if (!cancelled) setErr("Ne mogu dohvatiti uređaje.");
       } finally {
