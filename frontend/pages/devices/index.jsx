@@ -50,9 +50,23 @@ function DevicesPage() {
         const token = getToken();
         const u = parseJwt(token) || {};
         let c = String(router.query.country || "").toUpperCase();
-        if (!c && u.countryId) c = (await countryCodeById(u.countryId, token)) || "";
-        if (!c && String(u.role || "").toUpperCase() === "SUPERADMIN") { router.replace("/select-country"); return; }
-        if (!c) throw new Error("Nije moguće odrediti državu.");
+
+        // ako korisnik ima countryId u tokenu – probaj dohvatiti code iz backenda
+        if (!c && u.countryId) {
+          c = (await countryCodeById(u.countryId, token)) || "";
+        }
+
+        // ✅ Fallback: ako još nema koda, koristi HR
+        if (!c) {
+          c = "HR";
+        }
+
+        // ako želiš, možeš zadržati redirect za superadmina na posebnu stranicu:
+        // if (String(u.role || "").toUpperCase() === "SUPERADMIN" && !router.query.country) {
+        //   router.replace("/select-country"); 
+        //   return;
+        // }
+
         setCode(c);
         const r = await fetch(`${API}/admin/devices/${c.toLowerCase()}/list`, { headers: { Authorization: `Bearer ${token}` } });
         if (!r.ok) throw new Error("Greška pri dohvaćanju.");
