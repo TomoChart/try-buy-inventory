@@ -49,7 +49,8 @@ function DevicesPage() {
       try {
         const token = getToken();
         const u = parseJwt(token) || {};
-        let c = String(router.query.country || "").toUpperCase();
+        // IZMJENA: koristi i router.query.code
+      let c = String(router.query.code || router.query.country || "").toUpperCase();
         if (!c && u.countryId) c = (await countryCodeById(u.countryId, token)) || "";
         if (!c && String(u.role || "").toUpperCase() === "SUPERADMIN") { router.replace("/select-country"); return; }
         if (!c) throw new Error("Nije moguće odrediti državu.");
@@ -66,7 +67,7 @@ function DevicesPage() {
     }
     load();
     return () => { cancelled = true; };
-  }, [router.query.country]);
+  }, [router.query.country, router.query.code]);
 
   async function toggleExpand(serial) {
     if (expanded === serial) { setExpanded(null); setDetail(null); return; }
@@ -457,7 +458,4 @@ function DevicesPage() {
   );
 }
 
-export async function getServerSideProps() {
-return { redirect: { destination: '/c/hr/devices', permanent: false } };
-}
-export default function DevicesRedirect(){ return null; }
+export default DevicesPage;
