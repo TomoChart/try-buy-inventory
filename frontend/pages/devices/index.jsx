@@ -46,24 +46,50 @@ function DevicesPage() {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      try {
-        const token = getToken();
-        const u = parseJwt(token) || {};
-        // IZMJENA: koristi i router.query.code
+      // … izračun koda zemlje (c) ostaje kako već imaš …
+      const token = getToken();
+      const u = parseJwt(token) || {};
       let c = String(router.query.code || router.query.country || "").toUpperCase();
-        if (!c && u.countryId) c = (await countryCodeById(u.countryId, token)) || "";
-        if (!c && String(u.role || "").toUpperCase() === "SUPERADMIN") { router.replace("/select-country"); return; }
-        if (!c) throw new Error("Nije moguće odrediti državu.");
-        setCode(c);
-        const r = await fetch(`${API}/admin/devices/${c.toLowerCase()}/list`, { headers: { Authorization: `Bearer ${token}` } });
-        if (!r.ok) throw new Error("Greška pri dohvaćanju.");
-        const data = await r.json();
-        if (!cancelled) setRows(data || []);
+      if (!c && u.countryId) c = (await countryCodeById(u.countryId, token)) || "";
+      if (!c && String(u.role || "").toUpperCase() === "SUPERADMIN") { router.replace("/select-country"); return; }
+      if (!c) throw new Error("Nije moguće odrediti državu.");
+
+      const url = `${API}/admin/devices/${c.toLowerCase()}/list`;
+      console.log('DEVICES_FETCH_URL =', url); // debug
+
+      let res, text;
+      try {
+        res = await fetch(url, {
+          headers: { Authorization: `Bearer ${getToken()}` },
+        });
+        text = await res.text(); // čitamo kao text da možemo ispisati detaljnu poruku
       } catch (e) {
-        if (!cancelled) setErr("Ne mogu dohvatiti uređaje.");
-      } finally {
-        if (!cancelled) setLoading(false);
+        console.error('Network error:', e);
+        setErr('Mrežna greška do API-ja.');
+        return;
       }
+
+      if (!res.ok) {
+        console.error('Devices fetch failed:', res.status, text);
+        // prikaži status i tijelo odgovora na ekranu umjesto generičke poruke
+        setErr(`HTTP ${res.status}: ${text || 'Not OK'}`);
+        return;
+      }
+
+      // ako je OK, pokušaj parsirati JSON
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        console.error('JSON parse error. Body:', text);
+        setErr('Nevaljan JSON iz API-ja.');
+        return;
+      }
+
+      setRows(Array.isArray(data) ? data : []);
+      setCode(c);
+      setErr('');
+      if (!cancelled) setLoading(false);
     }
     load();
     return () => { cancelled = true; };
