@@ -1,9 +1,10 @@
-// === ORIGINALNI AUTH (web app radi na ovome) ===
 
-// ⬇⬇⬇ postavi bazni API bez trailing slasha i bez ikakvih dodatnih segmenata
-export const API =
-  (process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '')) ||
-  'https://api.try-buy-inv.net';
+// Bazni API iz env-a, bez završne "/" i bez legacy "/_m"
+const RAW_API = (process.env.NEXT_PUBLIC_API_URL || 'https://api.try-buy-inv.net').trim();
+
+export const API = RAW_API
+  .replace(/\/+$/, '')          // makni trailing slash(eve)
+  .replace(/\/_m(?=\/|$)/, ''); // makni "/_m" ako je ostalo u vrijednosti
 
 // Čuvamo token pod jednim ključem
 export const TOKEN_KEY = "jwt";
