@@ -457,3 +457,7 @@ function DevicesPage() {
   );
 }
 
+export async function getServerSideProps() {
+return { redirect: { destination: '/c/hr/devices', permanent: false } };
+}
+export default function DevicesRedirect(){ return null; }
