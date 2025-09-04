@@ -1,8 +1,9 @@
 // === ORIGINALNI AUTH (web app radi na ovome) ===
 
-// API base (prod domena kao fallback)
+// ⬇⬇⬇ postavi bazni API bez trailing slasha i bez ikakvih dodatnih segmenata
 export const API =
-  process.env.NEXT_PUBLIC_API_URL || "https://api.try-buy-inv.net";
+  (process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '')) ||
+  'https://api.try-buy-inv.net';
 
 // Čuvamo token pod jednim ključem
 export const TOKEN_KEY = "jwt";

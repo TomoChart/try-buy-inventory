@@ -457,4 +457,7 @@ function DevicesPage() {
   );
 }
 
-export default withAuth(DevicesPage, { roles: ["country_admin", "superadmin"] });
+export async function getServerSideProps() {
+  return { redirect: { destination: '/c/hr/devices', permanent: false } };
+}
+export default function DevicesRedirect(){ return null; }

@@ -105,7 +105,7 @@ export default function CsvImportModal({ onClose, countryCode = "HR", kind = "de
       });
       const data = await r.json();
       if (!r.ok) throw new Error(data?.error || "Import failed");
-      setResult({ ok: true, ...data });
+      setResult({ ok: true, data }); // ispravljeno
     } catch (e) {
       setResult({ ok: false, error: e.message });
     } finally {
@@ -146,7 +146,7 @@ export default function CsvImportModal({ onClose, countryCode = "HR", kind = "de
                   <select
                     className="w-1/2 text-xs border rounded px-2 py-1"
                     value={map[h] || ""}
-                    onChange={e => setMap(m => ({ ...m, [h]: e.target.value || undefined }))}
+                    onChange={e => setMap(m => ({ ...m, [h]: e.target.value || undefined }))} // ispravljeno
                   >
                     <option value="">(ignoriraj)</option>
                     {targetFields.map(f => (
