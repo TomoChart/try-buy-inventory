@@ -101,6 +101,32 @@ app.get('/countries', async (_req, res) => {
   }
 });
 
+// ===== DEVICES: generička lista po country code (HR/SI/RS) =====
+app.get('/admin/devices/:code/list',
+  requireAuth, requireRole('country_admin','superadmin'),
+  async (req, res) => {
+    try {
+      const code = String(req.params.code || '').toUpperCase();
+
+      const VIEW_MAP = {
+        HR: 'ui_devices_hr_list',
+        SI: 'ui_devices_si_list',
+        RS: 'ui_devices_rs_list',
+      };
+      const view = VIEW_MAP[code];
+      if (!view) return res.status(400).json({ error: 'Unknown country code' });
+
+      // dinamičko ime view-a mora ići kao unsafe (identifier), vrijednosti idu parametrizirano
+      const sql = `SELECT * FROM ${view}`;
+      const rows = await prisma.$queryRawUnsafe(sql);
+      return res.json(rows || []);
+    } catch (err) {
+      console.error('GET /admin/devices/:code/list error', err);
+      return res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
 // ===== DEVICES: CSV JSON IMPORT =====
 app.post(
   "/admin/devices/:code/import",
