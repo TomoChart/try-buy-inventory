@@ -101,7 +101,7 @@ app.get('/countries', async (_req, res) => {
   }
 });
 
-// ===== DEVICES: generička lista po country code (HR/SI/RS) =====
+/ ===== DEVICES: generička lista po country code (HR/SI/RS) =====
 app.get('/admin/devices/:code/list',
   requireAuth, requireRole('country_admin','superadmin'),
   async (req, res) => {
@@ -113,12 +113,14 @@ app.get('/admin/devices/:code/list',
         SI: 'ui_devices_si_list',
         RS: 'ui_devices_rs_list',
       };
+
       const view = VIEW_MAP[code];
       if (!view) return res.status(400).json({ error: 'Unknown country code' });
 
-      // dinamičko ime view-a mora ići kao unsafe (identifier), vrijednosti idu parametrizirano
+      // ime view-a je identifier → ide kroz unsafe; nema user inputa osim mapiranog koda
       const sql = `SELECT * FROM ${view}`;
       const rows = await prisma.$queryRawUnsafe(sql);
+
       return res.json(rows || []);
     } catch (err) {
       console.error('GET /admin/devices/:code/list error', err);
