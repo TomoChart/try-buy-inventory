@@ -64,6 +64,29 @@ function requireRole(...roles) {
 app.get('/', (_req,res)=>res.send({status:'OK'}));
 app.get('/healthz', (_req,res)=>res.status(200).send({status:'healthy'}));
 
+// === DEBUG: izlistaj sve registrirane rute (privremeno) ===
+app.get('/__routes', (_req, res) => {
+  try {
+    const out = [];
+    const scan = (stack, prefix = '') => {
+      (stack || []).forEach((layer) => {
+        if (layer.route && layer.route.path) {
+          const methods = Object.keys(layer.route.methods || {}).map(m => m.toUpperCase());
+          out.push({ method: methods.join(','), path: prefix + layer.route.path });
+        } else if (layer.name === 'router' && layer.handle && layer.handle.stack) {
+          // ugniježđeni Router (app.use(...))
+          scan(layer.handle.stack, prefix + (layer.regexp?.fast_slash ? '' : ''));
+        }
+      });
+    };
+    scan(app._router?.stack);
+    res.json(out);
+  } catch (e) {
+    console.error('routes debug err', e);
+    res.status(500).json({ error: 'routes-introspection-failed' });
+  }
+});
+
 // ===== Auth =====
 app.post('/auth/login', async (req, res) => {
   try {
@@ -101,7 +124,7 @@ app.get('/countries', async (_req, res) => {
   }
 });
 
-/ ===== DEVICES: generička lista po country code (HR/SI/RS) =====
+// ===== DEVICES: generička lista po country code (HR/SI/RS) =====
 app.get('/admin/devices/:code/list',
   requireAuth, requireRole('country_admin','superadmin'),
   async (req, res) => {
