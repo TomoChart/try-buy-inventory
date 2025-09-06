@@ -13,20 +13,23 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // 2) CORS
-const allowed = process.env.CORS_ORIGINS
-  ? process.env.CORS_ORIGINS.split(',').map(s => s.trim())
-  : [];
+const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
 
-app.use(cors({
-  origin(origin, cb) {
-    console.log('CORS_ORIGINS:', allowed, 'Origin:', origin);
-    if (!origin || allowed.includes(origin)) return cb(null, true);
-    return cb(new Error('CORS not allowed'), false);
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests from configured origins or tools with no origin (curl/healthz)
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
   },
-  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
-  allowedHeaders: ['Content-Type','Authorization'],
-}));
-app.options('*', cors());
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  maxAge: 86400, // cache preflight
+};
+
+app.use(cors(corsOptions));
+// Handle explicit preflight for all routes
+app.options('*', cors(corsOptions));
 
 // 3) prisma, helpers, auth middleware
 const prisma = new PrismaClient();
@@ -521,5 +524,10 @@ app.get('/admin/galaxy-try/:code/list',
         ORDER BY created_at DESC NULLS LAST, submission_id DESC
       `;
       const rows = await prisma.$queryRawUnsafe(sql, code);
-      return res.json(rows || []);
-    } catch
+          return res.json(rows || []);
+        } catch (err) {
+          console.error('GET /admin/galaxy-try/:code/list error', err);
+          return res.status(500).json({ error: 'Server error' });
+        }
+      }
+    );
