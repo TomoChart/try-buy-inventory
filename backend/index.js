@@ -451,17 +451,19 @@ app.post('/admin/galaxy-try/:code',
     }
   }
 );
-// DELETE /admin/galaxy-try/:code/:submission_id
+// DELETE /admin/galaxy-try/:code/:id
+// Napomena: "id" tretiramo kao submission_id (string), ne kao numerički ID.
+// Brisanje se radi u tablici leads_import, filtrirano po (submission_id, country_code).
 app.delete(
-  '/admin/galaxy-try/:code/:submission_id',
+  '/admin/galaxy-try/:code/:id',
   requireAuth,
   requireRole('country_admin','superadmin'),
   async (req, res) => {
     try {
       const code = String(req.params.code || '').toUpperCase();
-      const sid  = String(req.params.submission_id || '').trim();
+      const sid  = String(req.params.id || '').trim();
 
-      // 1) Validacija ulaza
+      // Validacije
       if (!['HR','SI','RS'].includes(code)) {
         return res.status(400).json({ error: 'Invalid country code (use HR, SI, or RS).' });
       }
@@ -469,18 +471,18 @@ app.delete(
         return res.status(400).json({ error: 'Missing submission_id.' });
       }
 
-      // 2) Brisanje iz leads_import po (submission_id, country_code)
-      const sql   = `DELETE FROM leads_import WHERE submission_id = $1 AND country_code = $2`;
+      // Brisanje po (submission_id, country_code)
+      const sql = `DELETE FROM leads_import WHERE submission_id = $1 AND country_code = $2`;
       const count = await prisma.$executeRawUnsafe(sql, sid, code);
 
-      // 3) Rezultat
       if (!count || Number(count) === 0) {
         return res.status(404).json({ error: 'Not found.' });
       }
-      // 204 No Content = uspjeh bez tijela
+
+      // Uspjeh: 204 No Content
       return res.status(204).send();
     } catch (err) {
-      console.error('DELETE /admin/galaxy-try/:code/:submission_id error', err);
+      console.error('DELETE /admin/galaxy-try/:code/:id error', err);
       return res.status(500).json({ error: 'Server error.' });
     }
   }
