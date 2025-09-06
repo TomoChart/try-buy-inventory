@@ -63,6 +63,7 @@ function requireRole(...roles) {
 // --- health ---
 app.get('/', (_req,res)=>res.send({status:'OK'}));
 app.get('/healthz', (_req,res)=>res.status(200).send({status:'healthy'}));
+app.get('/__hello', (_req, res) => res.send('hi'));
 
 // === DEBUG: izlistaj sve registrirane rute (privremeno) ===
 app.get('/__routes', (_req, res) => {
