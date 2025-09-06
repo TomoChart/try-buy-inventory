@@ -1,6 +1,5 @@
 // 1) require & init
 const express = require('express');
-const cors = require('cors');
 const dotenv = require('dotenv');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
@@ -13,22 +12,47 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // 2) CORS
-const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+const cors = require('cors');
+const url = require('url');
+
+const allowedOrigins = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+// promijeni po potrebi – prefiks tvog Vercel projekta
+const VERCEL_PROJECT_PREFIX = 'try-buy-inventory';
+
+function isAllowedVercelOrigin(origin) {
+  try {
+    const { host, protocol } = new url.URL(origin);
+    // dozvoli samo https
+    if (protocol !== 'https:') return false;
+    // *.vercel.app i host koji počinje na 'try-buy-inventory'
+    return host.endsWith('.vercel.app') && host.startsWith(VERCEL_PROJECT_PREFIX);
+  } catch {
+    return false;
+  }
+}
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests from configured origins or tools with no origin (curl/healthz)
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    // bez Origin zaglavlja (npr. curl/healthz) -> pusti
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin) || isAllowedVercelOrigin(origin)) {
+      return callback(null, true);
+    }
+    console.warn('CORS blocked origin:', origin);
     return callback(new Error('Not allowed by CORS'));
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
-  maxAge: 86400, // cache preflight
+  maxAge: 86400,
 };
 
 app.use(cors(corsOptions));
-// Handle explicit preflight for all routes
 app.options('*', cors(corsOptions));
 
 // 3) prisma, helpers, auth middleware
