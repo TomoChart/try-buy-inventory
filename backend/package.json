@@ -1,31 +1,12 @@
 {
-  "name": "try-buy-backend",
+  "name": "youniversity-backend",
   "version": "1.0.0",
-  "description": "",
   "main": "index.js",
-  "prisma": { "seed": "node prisma/seed.js" },
   "scripts": {
-    "prisma:generate": "prisma generate",
-    "prisma:seed": "prisma db seed",
-    "seed:superadmin": "node -r dotenv/config ./seed-superadmin.js",
-    "seed:admins": "node -r dotenv/config ./seed-country-admins.js",
-    "seed:all": "node -r dotenv/config ./seed.js",
     "start": "node index.js"
   },
   "dependencies": {
-    "@flydotio/litestream": "^1.0.1",
-    "@prisma/client": "^5.15.0",
-    "bcryptjs": "^2.4.3",
-    "cors": "^2.8.5",
-    "dotenv": "^16.0.3",
-    "express": "^4.18.2",
-    "jsonwebtoken": "^9.0.2"
-  },
-  "devDependencies": {
-    "@flydotio/dockerfile": "^0.7.10",
-    "prisma": "^5.22.0"
-  },
-  "dockerfile": {
-    "litestream": true
+    "express": "^4.18.0",
+    "prisma": "^4.0.0"
   }
 }
