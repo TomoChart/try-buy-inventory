@@ -654,17 +654,14 @@ async function handleDelete(submissionId) {
     }
     if (!confirm(`Obrisati zapis ${submissionId}?`)) return;
 
-    const res = await fetch(`/api/admin/galaxy-try/HR/${encodeURIComponent(submissionId)}`, {
+    const res = await fetch(`${API}/admin/galaxy-try/hr/${encodeURIComponent(submissionId)}`, {
       method: 'DELETE',
-      // Ako ne proxyaš preko Next API ruta, koristi punu URL backend-a:
-      // method: 'DELETE',
-      // headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-      // credentials: 'include',
+      headers: { Authorization: `Bearer ${getToken()}` }
     });
 
     if (res.status === 204) {
       // Ukloni red iz state-a bez refetcha
-      setRows(prev => prev.filter(r => r['Submission ID'] !== submissionId));
+      setRows(prev => prev.filter(r => r.submission_id !== submissionId));
       return;
     }
 
