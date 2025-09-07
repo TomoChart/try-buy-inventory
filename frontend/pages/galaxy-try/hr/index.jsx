@@ -193,7 +193,7 @@ function GalaxyTryHRPage() {
                       </button>
                       <button
                         className="px-2 py-1 rounded bg-red-600 text-white"
-                        onClick={() => handleDelete(r['Submission ID'])}
+                        onClick={() => handleDelete(r.submission_id)}
                       >
                         Delete
                       </button>
