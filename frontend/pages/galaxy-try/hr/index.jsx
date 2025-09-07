@@ -473,7 +473,7 @@ async function handleImportGalaxyCsv(e) {
     const token = getToken();
     if (!token) { alert('Nema tokena. Prijavi se ponovno.'); return; }
 
-    const endpoint = `${API}/admin/galaxy-try/HR/import?mode=upsert`;
+  const endpoint = `${API}/admin/galaxy-try/hr/import?mode=upsert`;
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
