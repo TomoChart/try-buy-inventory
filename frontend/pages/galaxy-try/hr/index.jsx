@@ -193,7 +193,7 @@ function GalaxyTryHRPage() {
                       </button>
                       <button
                         className="px-2 py-1 rounded bg-red-600 text-white"
-                        onClick={() => handleDelete(r.submission_id)}
+                        onClick={() => handleDelete(r['Submission ID'])}
                       >
                         Delete
                       </button>
@@ -643,6 +643,38 @@ function AddForm({ onCancel, onSaved }) {
       </div>
     </div>
   );
+}
+
+// DELETE handler – briše po submission_id (bez promjene CSV importa)
+async function handleDelete(submissionId) {
+  try {
+    if (!submissionId) {
+      alert('Nedostaje Submission ID.');
+      return;
+    }
+    if (!confirm(`Obrisati zapis ${submissionId}?`)) return;
+
+    const res = await fetch(`/api/admin/galaxy-try/HR/${encodeURIComponent(submissionId)}`, {
+      method: 'DELETE',
+      // Ako ne proxyaš preko Next API ruta, koristi punu URL backend-a:
+      // method: 'DELETE',
+      // headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      // credentials: 'include',
+    });
+
+    if (res.status === 204) {
+      // Ukloni red iz state-a bez refetcha
+      setRows(prev => prev.filter(r => r['Submission ID'] !== submissionId));
+      return;
+    }
+
+    // 404 ili drugo:
+    const txt = await res.text();
+    alert(`Delete nije uspio (${res.status}).\n${txt}`);
+  } catch (err) {
+    console.error('handleDelete error', err);
+    alert('Greška pri brisanju.');
+  }
 }
 
 export default withAuth(GalaxyTryHRPage, { roles: ["COUNTRY_ADMIN", "SUPERADMIN"] });
