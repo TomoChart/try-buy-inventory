@@ -3,6 +3,7 @@ import withAuth from "../../../components/withAuth";
 import { API, getToken } from "../../../lib/auth";
 import CsvImportModal from "../../../components/CsvImportModal";
 import { useRouter } from "next/router";
+import HomeButton from '../../../components/HomeButton';
 
 
 function GalaxyTryHRPage() {
@@ -135,6 +136,9 @@ function GalaxyTryHRPage() {
 
   return (
     <div className="p-6">
+      {/* Dodano: HomeButton prije glavnog sadržaja/hnaslova */}
+      <HomeButton />
+
       <div className="flex items-center justify-between mb-4">
         <button onClick={() => router.back()} className="px-3 py-2 border rounded hover:bg-gray-50">
           ← Back

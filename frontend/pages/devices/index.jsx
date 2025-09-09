@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import withAuth from "../../components/withAuth";
 import { API, getToken, parseJwt, countryCodeById } from "../../lib/auth";
 import Papa from "papaparse";
+import HomeButton from '../../components/HomeButton';
 
 const ALL_COLUMNS = [
   { key: "Model", label: "Model", always: true },
@@ -372,13 +373,14 @@ function DevicesPage() {
     };
   }
 
-  if (loading) return <div className="p-6">Učitavam…</div>;
-  if (err) return <div className="p-6 text-red-600">{err}</div>;
+  if (loading) return <div className="p-6"><HomeButton /><div>Učitavam…</div></div>;
+  if (err) return <div className="p-6"><HomeButton /><div className="text-red-600">{err}</div></div>;
 
   const headers = ALL_COLUMNS.filter(c => visible[c.key]);
 
   return (
     <div className="p-6">
+      <HomeButton />
       <BackBtn />
       <h1 className="text-xl font-bold mb-2">Devices — {code}</h1>
 
