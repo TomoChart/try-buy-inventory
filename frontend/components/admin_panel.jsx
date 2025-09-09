@@ -30,7 +30,7 @@ export default function AdminPanel({
       <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold">Admin Panel</h1>
-          <p className="text-sm text-neutral-500">Users & BTL evidencija (devices/loans)</p>
+          <p className="text-sm text-neutral-500">Users (devices/loans)</p>
         </div>
         <div className="flex items-center gap-3">
           <CountrySelect
@@ -54,15 +54,7 @@ export default function AdminPanel({
           />
         </section>
 
-        <section className="bg-white rounded-2xl shadow p-5">
-          <h2 className="text-xl font-semibold mb-4">BTL evidencija (Uređaji)</h2>
-          <DevicesTable
-            token={token}
-            baseUrl={baseUrl}
-            selectedCountry={selectedCountry}
-          />
-        </section>
-      </main>
+          </main>
     </div>
   );
 }
