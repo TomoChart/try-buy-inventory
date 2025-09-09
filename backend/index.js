@@ -640,3 +640,69 @@ app.listen(PORT, '0.0.0.0', () => {
 
 // (opcionalno za testove)
 module.exports = app;
+
+/**
+ * Create user (operator/admin)
+ * Access: SUPERADMIN (može sve) ili country_admin (ograničeno na svoju zemlju)
+ * Body:
+ *  - email (string, required)
+ *  - password (string, required)
+ *  - role (string: "OPERATOR" | "COUNTRY_ADMIN", default "OPERATOR")
+ *  - countryId (number | null)  -> required za COUNTRY_ADMIN i OPERATOR
+ */
+app.post('/admin/users',
+  requireAuth,
+  requireRole('superadmin','country_admin'),
+  async (req, res) => {
+    try {
+      let { email, password, role, countryId } = req.body || {};
+      email = String(email || '').trim().toLowerCase();
+      role = String(role || 'OPERATOR').toUpperCase();
+
+      if (!email || !password) {
+        return res.status(400).json({ error: 'Missing email or password' });
+      }
+      if (!['OPERATOR','COUNTRY_ADMIN'].includes(role)) {
+        return res.status(400).json({ error: 'Invalid role' });
+      }
+
+      // Ako je caller country_admin, mora kreirati unutar svoje zemlje
+      const caller = req.user || {};
+      const callerRole = String(caller.role || '').toUpperCase();
+      if (callerRole === 'COUNTRY_ADMIN') {
+        if (!caller.countryId) {
+          return res.status(403).json({ error: 'Caller has no country bound' });
+        }
+        countryId = caller.countryId; // force na svoju zemlju
+      } else {
+        // SUPERADMIN: ako je role != SUPERADMIN, zahtijevaj countryId
+        if (role !== 'SUPERADMIN' && !countryId) {
+          return res.status(400).json({ error: 'countryId is required for non-superadmin users' });
+        }
+      }
+
+      // jedinstveni email
+      const exists = await prisma.user.findUnique({ where: { email } });
+      if (exists) {
+        return res.status(409).json({ error: 'Email already exists' });
+      }
+
+      const passwordHash = await bcrypt.hash(password, 10);
+
+      const created = await prisma.user.create({
+        data: {
+          email,
+          passwordHash,
+          role,           // "OPERATOR" | "COUNTRY_ADMIN"
+          countryId: countryId ?? null,
+        },
+        select: { id: true, email: true, role: true, countryId: true, createdAt: true }
+      });
+
+      return res.status(201).json({ user: created });
+    } catch (err) {
+      console.error('POST /admin/users error', err);
+      return res.status(500).json({ error: 'Server error.' });
+    }
+  }
+);
