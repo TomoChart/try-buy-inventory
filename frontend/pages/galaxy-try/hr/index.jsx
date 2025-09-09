@@ -93,6 +93,27 @@ function GalaxyTryHRPage() {
       note:           r.note           ?? r["Note"]           ?? "",
     };
   }
+ async function handleDelete(submissionId) {
+    try {
+      if (!submissionId) { alert('Nedostaje Submission ID.'); return; }
+      if (!confirm(`Obrisati zapis ${submissionId}?`)) return;
+
+      const res = await fetch(`${API}/admin/galaxy-try/hr/${encodeURIComponent(submissionId)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+
+      if (res.status === 204) {
+        setRows(prev => prev.filter(r => r.submission_id !== submissionId));
+        return;
+      }
+      const txt = await res.text();
+      alert(`Delete nije uspio (${res.status}).\n${txt}`);
+    } catch (err) {
+      console.error('handleDelete error', err);
+      alert('Greška pri brisanju.');
+    }
+  }
 
   async function load() {
     try {
@@ -643,35 +664,6 @@ function AddForm({ onCancel, onSaved }) {
       </div>
     </div>
   );
-}
-
-// DELETE handler – briše po submission_id (bez promjene CSV importa)
-async function handleDelete(submissionId) {
-  try {
-    if (!submissionId) {
-      alert('Nedostaje Submission ID.');
-      return;
-    }
-    if (!confirm(`Obrisati zapis ${submissionId}?`)) return;
-
-    const res = await fetch(`${API}/admin/galaxy-try/hr/${encodeURIComponent(submissionId)}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${getToken()}` }
-    });
-
-    if (res.status === 204) {
-      // Ukloni red iz state-a bez refetcha
-      setRows(prev => prev.filter(r => r.submission_id !== submissionId));
-      return;
-    }
-
-    // 404 ili drugo:
-    const txt = await res.text();
-    alert(`Delete nije uspio (${res.status}).\n${txt}`);
-  } catch (err) {
-    console.error('handleDelete error', err);
-    alert('Greška pri brisanju.');
-  }
 }
 
 export default withAuth(GalaxyTryHRPage, { roles: ["COUNTRY_ADMIN", "SUPERADMIN"] });
