@@ -133,18 +133,57 @@ app.post('/auth/login', async (req, res) => {
 });
 
 // ===== Users =====
-app.get('/users', requireAuth, requireRole('superadmin','country_admin'), async (_req, res) => {
+// Zamijenjeno: /users → /adminusers
+app.get('/adminusers', requireAuth, requireRole('superadmin','country_admin'), async (_req, res) => {
   const users = await prisma.user.findMany({ orderBy: { id: 'asc' } });
   res.json(users);
 });
-app.post('/users', requireAuth, requireRole('superadmin','country_admin'), async (req, res) => {
-  const { email, password, role, countryId } = req.body || {};
-  if (!email || !password || !role) return res.status(400).json({ error: 'Missing fields' });
-  const passwordHash = await bcrypt.hash(password, 12);
-  const created = await prisma.user.create({ data: { email, passwordHash, role, countryId: countryId ?? null } });
-  res.json(created);
+app.post('/adminusers', requireAuth, requireRole('superadmin','country_admin'), async (req, res) => {
+  let { email, password, role, countryId } = req.body || {};
+  email = String(email || '').trim().toLowerCase();
+  role = String(role || 'OPERATOR').toUpperCase();
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Missing email or password' });
+  }
+  if (!['OPERATOR','COUNTRY_ADMIN'].includes(role)) {
+    return res.status(400).json({ error: 'Invalid role' });
+  }
+
+  // Ako je caller country_admin, prisilno vežemo na njegovu zemlju
+  const caller = req.user || {};
+  const callerRole = String(caller.role || '').toUpperCase();
+  if (callerRole === 'COUNTRY_ADMIN') {
+    if (!caller.countryId) {
+      return res.status(403).json({ error: 'Caller has no country bound' });
+    }
+    countryId = caller.countryId;
+  } else {
+    if (role !== 'SUPERADMIN' && !countryId) {
+      return res.status(400).json({ error: 'countryId is required for non-superadmin users' });
+    }
+  }
+
+  const exists = await prisma.user.findUnique({ where: { email } });
+  if (exists) {
+    return res.status(409).json({ error: 'Email already exists' });
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  const created = await prisma.user.create({
+    data: {
+      email,
+      passwordHash,
+      role,                 // "OPERATOR" | "COUNTRY_ADMIN"
+      countryId: countryId ?? null,
+    },
+    select: { id: true, email: true, role: true, countryId: true, createdAt: true }
+  });
+
+  return res.status(201).json({ user: created });
 });
-app.patch('/users/:id', requireAuth, requireRole('superadmin','country_admin'), async (req, res) => {
+app.patch('/adminusers/:id', requireAuth, requireRole('superadmin','country_admin'), async (req, res) => {
   const id = Number(req.params.id);
   const data = { ...req.body };
   if (data.password) {
@@ -154,7 +193,7 @@ app.patch('/users/:id', requireAuth, requireRole('superadmin','country_admin'), 
   const updated = await prisma.user.update({ where: { id }, data });
   res.json(updated);
 });
-app.delete('/users/:id', requireAuth, requireRole('superadmin','country_admin'), async (req, res) => {
+app.delete('/adminusers/:id', requireAuth, requireRole('superadmin','country_admin'), async (req, res) => {
   const id = Number(req.params.id);
   await prisma.user.delete({ where: { id } });
   res.json({ success: true });
@@ -641,16 +680,10 @@ app.listen(PORT, '0.0.0.0', () => {
 // (opcionalno za testove)
 module.exports = app;
 
-/**
- * Create user (operator/admin)
- * Access: SUPERADMIN (može sve) ili country_admin (ograničeno na svoju zemlju)
- * Body:
- *  - email (string, required)
- *  - password (string, required)
- *  - role (string: "OPERATOR" | "COUNTRY_ADMIN", default "OPERATOR")
- *  - countryId (number | null)  -> required za COUNTRY_ADMIN i OPERATOR
- */
-app.post('/admin/users',
+// === CREATE USER (admin creates operator/country_admin) ===
+// STARI PATH: app.post('/admin/users', ...)
+// NOVI PATH:
+app.post('/adminusers',
   requireAuth,
   requireRole('superadmin','country_admin'),
   async (req, res) => {
@@ -666,22 +699,20 @@ app.post('/admin/users',
         return res.status(400).json({ error: 'Invalid role' });
       }
 
-      // Ako je caller country_admin, mora kreirati unutar svoje zemlje
+      // Ako je caller country_admin, prisilno vežemo na njegovu zemlju
       const caller = req.user || {};
       const callerRole = String(caller.role || '').toUpperCase();
       if (callerRole === 'COUNTRY_ADMIN') {
         if (!caller.countryId) {
           return res.status(403).json({ error: 'Caller has no country bound' });
         }
-        countryId = caller.countryId; // force na svoju zemlju
+        countryId = caller.countryId;
       } else {
-        // SUPERADMIN: ako je role != SUPERADMIN, zahtijevaj countryId
         if (role !== 'SUPERADMIN' && !countryId) {
           return res.status(400).json({ error: 'countryId is required for non-superadmin users' });
         }
       }
 
-      // jedinstveni email
       const exists = await prisma.user.findUnique({ where: { email } });
       if (exists) {
         return res.status(409).json({ error: 'Email already exists' });
@@ -693,7 +724,7 @@ app.post('/admin/users',
         data: {
           email,
           passwordHash,
-          role,           // "OPERATOR" | "COUNTRY_ADMIN"
+          role,                 // "OPERATOR" | "COUNTRY_ADMIN"
           countryId: countryId ?? null,
         },
         select: { id: true, email: true, role: true, countryId: true, createdAt: true }
@@ -701,7 +732,7 @@ app.post('/admin/users',
 
       return res.status(201).json({ user: created });
     } catch (err) {
-      console.error('POST /admin/users error', err);
+      console.error('POST /adminusers error', err);
       return res.status(500).json({ error: 'Server error.' });
     }
   }
