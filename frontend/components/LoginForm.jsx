@@ -41,16 +41,16 @@ function DevResetModal({ onClose }) {
 						onChange={e => setResetEmail(e.target.value)}
 						required
 					/>
-					<button type="submit" className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 mb-2" disabled={loading}>
-						{loading ? "Generiram..." : "Generiraj reset link"}
-					</button>
+                                        <button type="submit" className="w-full bg-samsung-blue text-white py-2 rounded hover:bg-samsung-blue/90 mb-2" disabled={loading}>
+                                                {loading ? "Generiram..." : "Generiraj reset link"}
+                                        </button>
 				</form>
 				{resetResult && (
 					<div className="bg-gray-100 p-2 rounded text-xs break-all mt-2">
 						<div className="mb-1">Reset link/token:</div>
 						<div className="mb-2"><code>{resetResult.resetUrl || resetResult.error}</code></div>
 						{resetResult.resetUrl && (
-							<a href={resetResult.resetUrl} className="text-blue-600 underline" onClick={onClose}>
+                                                        <a href={resetResult.resetUrl} className="text-samsung-blue underline" onClick={onClose}>
 								Otvori stranicu za unos nove lozinke
 							</a>
 						)}
@@ -142,17 +142,17 @@ export default function LoginForm() {
 					<label htmlFor="rememberMe" className="ml-2">Zapamti me</label>
 				</div>
 				{err && <div className="text-red-600 text-sm mb-2">{err}</div>}
-				<button
-					type="submit"
-					className="w-full bg-blue-600 text-white py-2 rounded disabled:opacity-50"
-					disabled={submitting}
-				>
-					{submitting ? "Prijava..." : "Prijavi se"}
-				</button>
+                                <button
+                                        type="submit"
+                                        className="w-full bg-samsung-blue text-white py-2 rounded disabled:opacity-50 hover:bg-samsung-blue/90"
+                                        disabled={submitting}
+                                >
+                                        {submitting ? "Prijava..." : "Prijavi se"}
+                                </button>
 			</form>
 			<div className="mt-6 flex justify-center">
 				<button
-					className="text-sm text-blue-600 font-semibold hover:text-blue-800 transition-colors duration-150 underline underline-offset-4"
+                                        className="text-sm text-samsung-blue font-semibold hover:text-samsung-blue/80 transition-colors duration-150 underline underline-offset-4"
 					onClick={() => setShowReset(true)}
 					type="button"
 				>

@@ -6,7 +6,11 @@ module.exports = {
     "./app/**/*.{js,jsx,ts,tsx,mdx}"
   ],
   theme: {
-    extend: {}
+    extend: {
+      colors: {
+        'samsung-blue': '#1428A0'
+      }
+    }
   },
   plugins: []
 };
