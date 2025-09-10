@@ -108,8 +108,8 @@ export default function LoginForm() {
 		}
 	}
 
-	return (
-		<div className="max-w-sm mx-auto mt-12 bg-white p-8 rounded shadow">
+        return (
+                <div className="w-full max-w-sm bg-white p-8 rounded shadow">
 			<h2 className="text-2xl font-bold mb-6 text-center">Prijava</h2>
 			<form onSubmit={handleSubmit}>
 				<div className="mb-4">
