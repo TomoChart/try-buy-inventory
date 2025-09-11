@@ -373,16 +373,31 @@ function DevicesPage() {
     };
   }
 
-  if (loading) return <div className="p-6"><HomeButton /><div>Učitavam…</div></div>;
-  if (err) return <div className="p-6"><HomeButton /><div className="text-red-600">{err}</div></div>;
+  if (loading) return (
+    <div className="min-h-screen bg-gradient-to-b from-[#1428A0] to-[#1B4FD9]">
+      <div className="p-6">
+        <HomeButton />
+        <div>Učitavam…</div>
+      </div>
+    </div>
+  );
+  if (err) return (
+    <div className="min-h-screen bg-gradient-to-b from-[#1428A0] to-[#1B4FD9]">
+      <div className="p-6">
+        <HomeButton />
+        <div className="text-red-600">{err}</div>
+      </div>
+    </div>
+  );
 
   const headers = ALL_COLUMNS.filter(c => visible[c.key]);
 
   return (
-    <div className="p-6">
-      <HomeButton />
-      <BackBtn />
-      <h1 className="text-xl font-bold mb-2">Devices — {code}</h1>
+    <div className="min-h-screen bg-gradient-to-b from-[#1428A0] to-[#1B4FD9]">
+      <div className="p-6">
+        <HomeButton />
+        <BackBtn />
+        <h1 className="text-xl font-bold mb-2">Devices — {code}</h1>
 
       <div className="mb-2 flex items-center gap-2">
         <button className="px-3 py-1 rounded bg-green-600 text-white" onClick={()=>setAdding(true)}>+ Add device</button>
@@ -453,8 +468,9 @@ function DevicesPage() {
         </table>
       </div>
 
-      {editing && <EditModal item={editing} onClose={()=>setEditing(null)} />}
-      {adding && <AddModal onClose={()=>setAdding(false)} />}
+        {editing && <EditModal item={editing} onClose={()=>setEditing(null)} />}
+        {adding && <AddModal onClose={()=>setAdding(false)} />}
+      </div>
     </div>
   );
 }
