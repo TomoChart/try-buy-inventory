@@ -29,6 +29,9 @@ function GalaxyTryRSPage() {
 
   const fileRef = useRef(null);
 
+  const containerClasses = "p-6 min-h-screen bg-no-repeat bg-cover bg-center";
+  const bgStyle = { backgroundImage: "url('/Background galaxytry.jpg')" };
+
   // pomoćne
   function toDateOnly(v) {
     if (!v) return "";
@@ -113,7 +116,7 @@ function GalaxyTryRSPage() {
   useEffect(() => { load(); }, []);
 
   return (
-    <div className="p-6">
+    <div className={containerClasses} style={bgStyle}>
       <div className="flex items-center justify-between mb-4">
         <button onClick={() => router.back()} className="px-3 py-2 border rounded hover:bg-gray-50">
           ← Back

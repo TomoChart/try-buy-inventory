@@ -30,6 +30,9 @@ function GalaxyTryHRPage() {
 
   const fileRef = useRef(null);
 
+  const containerClasses = "p-6 min-h-screen bg-no-repeat bg-cover bg-center";
+  const bgStyle = { backgroundImage: "url('/Background galaxytry.jpg')" };
+
   // pomoćne
   function toDateOnly(v) {
     if (!v) return "";
@@ -135,7 +138,7 @@ function GalaxyTryHRPage() {
   useEffect(() => { load(); }, []);
 
   return (
-    <div className="p-6">
+    <div className={containerClasses} style={bgStyle}>
       {/* Dodano: HomeButton prije glavnog sadržaja/hnaslova */}
       <HomeButton />
 
