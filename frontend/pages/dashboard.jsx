@@ -1,38 +1,54 @@
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import withAuth from "../components/withAuth";
-import AppLayout from "../components/AppLayout";
-import { getToken, parseJwt, TOKEN_KEY } from "../lib/auth";
+import { getToken, parseJwt, countryCodeById } from "../lib/auth";
 
 function DashboardPage() {
-  const [user, setUser] = useState(null);
+  const [code, setCode] = useState("hr");
 
   useEffect(() => {
-    const t = getToken();
-    if (!t) { window.location.assign("/login"); return; }
-    const u = parseJwt(t);
-    if (!u) { window.location.assign("/login"); return; }
-    setUser(u);
+    let cancelled = false;
+    (async () => {
+      try {
+        const t = getToken();
+        const u = t ? parseJwt(t) : null;
+        if (u?.countryId) {
+          const c = await countryCodeById(u.countryId, t);
+          if (!cancelled && c) setCode(String(c).toLowerCase());
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
-  if (!user) return null;
+  const galaxyHref = `/galaxy-try/${code}`;
+  const devicesHref = `/devices?country=${code}`;
 
   return (
-    <AppLayout>
-      <h1 className="text-2xl font-semibold mb-3">Dashboard</h1>
-      <p className="text-slate-600">Dobrodošli, {user.email}!</p>
-      <div className="mt-6">
-        <button
-          onClick={() => {
-            localStorage.removeItem(TOKEN_KEY);
-            sessionStorage.removeItem(TOKEN_KEY);
-            window.location.assign("/login");
-          }}
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
-        >
-          Logout
-        </button>
-      </div>
-    </AppLayout>
+    <div className="min-h-screen grid grid-cols-2 bg-gradient-to-br from-samsung-blue to-black">
+      <Link href={galaxyHref} className="relative block group">
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: "url('/Background galaxytry.jpg')" }}
+        />
+        <div className="absolute inset-0 bg-black/30 group-hover:bg-black/40 transition-colors" />
+        <div className="relative flex h-full items-center justify-center text-white text-4xl font-bold">
+          GALAXY TRY
+        </div>
+      </Link>
+      <Link href={devicesHref} className="relative block group">
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: "url('/Background foldables.jpg')" }}
+        />
+        <div className="absolute inset-0 bg-black/30 group-hover:bg-black/40 transition-colors" />
+        <div className="relative flex h-full items-center justify-center text-white text-4xl font-bold">
+          DEVICES
+        </div>
+      </Link>
+    </div>
   );
 }
 
