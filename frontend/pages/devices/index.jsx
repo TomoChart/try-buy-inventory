@@ -379,7 +379,10 @@ function DevicesPage() {
   const headers = ALL_COLUMNS.filter(c => visible[c.key]);
 
   return (
-    <div className="p-6">
+    <div
+      className="p-6 min-h-screen bg-cover bg-center"
+      style={{ backgroundImage: "url('/Background S25 v1.jpg')" }}
+    >
       <HomeButton />
       <BackBtn />
       <h1 className="text-xl font-bold mb-2">Devices — {code}</h1>
