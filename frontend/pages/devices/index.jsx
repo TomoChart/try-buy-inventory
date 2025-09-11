@@ -44,6 +44,9 @@ function DevicesPage() {
   const [editing, setEditing] = useState(null);   // detail JSON
   const [adding, setAdding] = useState(false);    // bool
 
+  const containerClasses = "p-6 min-h-screen bg-no-repeat bg-cover bg-center";
+  const bgStyle = { backgroundImage: "url('/Background S25 v1.jpg')" };
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -373,13 +376,13 @@ function DevicesPage() {
     };
   }
 
-  if (loading) return <div className="p-6"><HomeButton /><div>Učitavam…</div></div>;
-  if (err) return <div className="p-6"><HomeButton /><div className="text-red-600">{err}</div></div>;
+  if (loading) return <div className={containerClasses} style={bgStyle}><HomeButton /><div>Učitavam…</div></div>;
+  if (err) return <div className={containerClasses} style={bgStyle}><HomeButton /><div className="text-red-600">{err}</div></div>;
 
   const headers = ALL_COLUMNS.filter(c => visible[c.key]);
 
   return (
-    <div className="p-6">
+    <div className={containerClasses} style={bgStyle}>
       <HomeButton />
       <BackBtn />
       <h1 className="text-xl font-bold mb-2">Devices — {code}</h1>
