@@ -1,38 +1,61 @@
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/router";
 import withAuth from "../components/withAuth";
-import AppLayout from "../components/AppLayout";
-import { getToken, parseJwt, TOKEN_KEY } from "../lib/auth";
+import { getToken, parseJwt, countryCodeById } from "../lib/auth";
 
 function DashboardPage() {
-  const [user, setUser] = useState(null);
+  const router = useRouter();
+  const [code, setCode] = useState("");
 
   useEffect(() => {
-    const t = getToken();
-    if (!t) { window.location.assign("/login"); return; }
-    const u = parseJwt(t);
-    if (!u) { window.location.assign("/login"); return; }
-    setUser(u);
-  }, []);
+    let cancelled = false;
+    (async () => {
+      const token = getToken();
+      const user = token ? parseJwt(token) : null;
+      if (!user) { window.location.assign("/login"); return; }
+      let c = String(router.query.code || "").toLowerCase();
+      if (!c && user.countryId) {
+        try {
+          const fetched = await countryCodeById(user.countryId, token);
+          if (fetched) c = String(fetched).toLowerCase();
+        } catch {}
+      }
+      if (!cancelled) setCode(c);
+    })();
+    return () => { cancelled = true; };
+  }, [router.query.code]);
 
-  if (!user) return null;
+  const gtLink = code ? `/galaxy-try/${code}` : "/galaxy-try";
+  const devLink = code ? `/c/${code}/devices` : "/devices";
 
   return (
-    <AppLayout>
-      <h1 className="text-2xl font-semibold mb-3">Dashboard</h1>
-      <p className="text-slate-600">Dobrodošli, {user.email}!</p>
-      <div className="mt-6">
-        <button
-          onClick={() => {
-            localStorage.removeItem(TOKEN_KEY);
-            sessionStorage.removeItem(TOKEN_KEY);
-            window.location.assign("/login");
-          }}
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
-        >
-          Logout
-        </button>
-      </div>
-    </AppLayout>
+    <div className="grid grid-cols-2 h-screen bg-gradient-to-br from-samsung-blue to-black">
+      <Link href={gtLink} className="relative block">
+        <div
+          className="absolute inset-0 bg-center bg-cover"
+          style={{ backgroundImage: "url('/Background%20galaxytry.jpg')" }}
+        />
+        <div className="absolute inset-0 bg-black/40" />
+        <div className="relative flex h-full w-full items-center justify-center">
+          <span className="text-white text-4xl md:text-5xl font-bold">
+            GALAXY TRY
+          </span>
+        </div>
+      </Link>
+      <Link href={devLink} className="relative block">
+        <div
+          className="absolute inset-0 bg-center bg-cover"
+          style={{ backgroundImage: "url('/Background%20foldables.jpg')" }}
+        />
+        <div className="absolute inset-0 bg-black/40" />
+        <div className="relative flex h-full w-full items-center justify-center">
+          <span className="text-white text-4xl md:text-5xl font-bold">
+            DEVICES
+          </span>
+        </div>
+      </Link>
+    </div>
   );
 }
 
