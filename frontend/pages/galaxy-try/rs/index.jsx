@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import withAuth from "../../../components/withAuth";
-import { API, getToken } from "../../../lib/auth";
+import { API, getToken, handleUnauthorized } from "../../../lib/auth";
 import CsvImportModal from "../../../components/CsvImportModal";
 import { useRouter } from "next/router";
 
@@ -100,6 +100,7 @@ function GalaxyTryRSPage() {
       const r = await fetch(`${API}/admin/galaxy-try/rs/list`, {
         headers: { Authorization: `Bearer ${getToken()}` }
       });
+      if (r.status === 401) { handleUnauthorized(router); return; }
       if (!r.ok) throw new Error();
       const data = await r.json();
       setRows((data || []).map(normalizeRow));

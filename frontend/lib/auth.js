@@ -19,6 +19,19 @@ export function getToken() {
   return sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY);
 }
 
+// Common handler for unauthorized API responses
+export function handleUnauthorized(router) {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(TOKEN_KEY);
+  alert("Session expired. Please log in again.");
+  if (router?.push) {
+    router.push("/login");
+  } else {
+    window.location.href = "/login";
+  }
+}
+
 export function parseJwt(token) {
   try {
     const base64 = token.split(".")[1];
