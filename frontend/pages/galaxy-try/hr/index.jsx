@@ -135,7 +135,10 @@ function GalaxyTryHRPage() {
   useEffect(() => { load(); }, []);
 
   return (
-    <div className="p-6">
+    <div
+      className="p-6 min-h-screen bg-cover bg-center"
+      style={{ backgroundImage: "url('/Background galaxytry.jpg')" }}
+    >
       {/* Dodano: HomeButton prije glavnog sadržaja/hnaslova */}
       <HomeButton />
 
