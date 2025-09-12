@@ -17,6 +17,10 @@ function GalaxyTryHRPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [adding, setAdding] = useState(false);
 
+  const [selected, setSelected] = useState([]);
+  const [columnFilters, setColumnFilters] = useState({});
+  const [sort, setSort] = useState({ key: "", dir: "asc" });
+
   // koji red editiramo
   const [editingId, setEditingId] = useState(null);
   // lokalna polja za edit
@@ -135,6 +139,87 @@ function GalaxyTryHRPage() {
 
   useEffect(() => { load(); }, []);
 
+  function handleSort(key) {
+    setSort(s => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
+  }
+
+  const filtered = rows.filter(r => {
+    for (const [k, v] of Object.entries(columnFilters)) {
+      if (!v) continue;
+      const val = k === "daysLeft" ? String(daysLeft(r.date_handover)) : String(r[k] ?? "");
+      if (!val.toLowerCase().includes(String(v).toLowerCase())) return false;
+    }
+    return true;
+  });
+
+  const sorted = sort.key
+    ? [...filtered].sort((a, b) => {
+        let va, vb;
+        if (sort.key === "daysLeft") {
+          va = daysLeft(a.date_handover);
+          vb = daysLeft(b.date_handover);
+        } else {
+          va = a[sort.key];
+          vb = b[sort.key];
+        }
+        const numA = Number(va);
+        const numB = Number(vb);
+        if (!isNaN(numA) && !isNaN(numB)) {
+          return sort.dir === "asc" ? numA - numB : numB - numA;
+        }
+        va = (va ?? "").toString().toLowerCase();
+        vb = (vb ?? "").toString().toLowerCase();
+        if (va < vb) return sort.dir === "asc" ? -1 : 1;
+        if (va > vb) return sort.dir === "asc" ? 1 : -1;
+        return 0;
+      })
+    : filtered;
+
+  const allSelected = sorted.length > 0 && sorted.every(r => selected.includes(r.submission_id));
+
+  function toggleSelect(id) {
+    setSelected(s => (s.includes(id) ? s.filter(k => k !== id) : [...s, id]));
+  }
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      const visible = sorted.map(r => r.submission_id);
+      setSelected(s => s.filter(k => !visible.includes(k)));
+    } else {
+      setSelected(sorted.map(r => r.submission_id));
+    }
+  }
+
+  async function handleDeleteSelected() {
+    if (!selected.length) return;
+    if (!confirm(`Obrisati ${selected.length} zapisa?`)) return;
+    for (const id of selected) {
+      await fetch(`${API}/admin/galaxy-try/hr/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+    }
+    setRows(prev => prev.filter(r => !selected.includes(r.submission_id)));
+    setSelected([]);
+  }
+
+  const columns = [
+    { key: "first_name", label: "First Name" },
+    { key: "last_name", label: "Last Name" },
+    { key: "email", label: "Email" },
+    { key: "phone", label: "Phone" },
+    { key: "address", label: "Address" },
+    { key: "city", label: "City" },
+    { key: "pickup_city", label: "Pickup City" },
+    { key: "created_at", label: "Created At" },
+    { key: "date_contacted", label: "Contacted At" },
+    { key: "date_handover", label: "Handover At" },
+    { key: "daysLeft", label: "Days left" },
+    { key: "model", label: "Model" },
+    { key: "serial_number", label: "Serial Number" },
+    { key: "note", label: "Note" },
+  ];
+
   return (
     <div
       className="p-6 min-h-screen bg-cover bg-center"
@@ -172,67 +257,83 @@ function GalaxyTryHRPage() {
       </div>
 
       {loading ? <div>Učitavam…</div> : err ? <div className="text-red-600">{err}</div> : (
-        <div className="overflow-x-auto bg-white rounded shadow">
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="p-2 text-left">First Name</th>
-                <th className="p-2 text-left">Last Name</th>
-                <th className="p-2 text-left">Email</th>
-                <th className="p-2 text-left">Phone</th>
-                <th className="p-2 text-left">Address</th>      {/* NOVO */}
-                <th className="p-2 text-left">City</th>         {/* NOVO */}
-                <th className="p-2 text-left">Pickup City</th>
-                <th className="p-2 text-left">Created At</th>
-                <th className="p-2 text-left">Contacted At</th>
-                <th className="p-2 text-left">Handover At</th>
-                <th className="p-2 text-left">Days left</th>    {/* NOVO */}
-                <th className="p-2 text-left">Model</th>
-                <th className="p-2 text-left">Serial Number</th>
-                <th className="p-2 text-left">Note</th>         {/* NOVO */}
-                <th className="p-2 text-left">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => {
-                const left = daysLeft(r.date_handover);
-                const leftStyle = (left === 0) ? { backgroundColor: "#fee2e2", color: "#991b1b", fontWeight: 600 } : {};
-                return (
-                  <tr key={r.submission_id}>
-                    <td>{r.first_name ?? "-"}</td>
-                    <td>{r.last_name ?? "-"}</td>
-                    <td>{r.email ?? "-"}</td>
-                    <td>{r.phone ?? "-"}</td>
-                    <td>{r.address || "-"}</td>
-                    <td>{r.city || "-"}</td>
-                    <td>{r.pickup_city ?? "-"}</td>
-                    <td>{fmtDateDMY(r.created_at)}</td>
-                    <td>{fmtDateDMY(r.date_contacted)}</td>
-                    <td>{fmtDateDMY(r.date_handover)}</td>
-                    <td style={leftStyle}>{left === "" ? "" : left}</td>
-                    <td>{r.model ?? "-"}</td>
-                    <td>{r.serial_number ?? "-"}</td>
-                    <td>{r.note ?? "-"}</td>
-                    <td className="p-2 whitespace-nowrap">
-                      <button
-                        className="px-2 py-1 rounded bg-blue-600 text-white mr-2"
-                        onClick={() => { setEditing(r); setShowEdit(true); }}
+        <>
+          {selected.length > 0 && (
+            <div className="mb-2">
+              <button
+                className="px-3 py-1 rounded bg-red-600 text-white"
+                onClick={handleDeleteSelected}
+              >
+                Delete selected ({selected.length})
+              </button>
+            </div>
+          )}
+          <div className="overflow-x-auto bg-white rounded shadow">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="p-2 text-left"><input type="checkbox" checked={allSelected} onChange={toggleSelectAll} /></th>
+                  {columns.map(c => (
+                    <th key={c.key} className="p-2 text-left">
+                      <div
+                        className="flex items-center cursor-pointer select-none"
+                        onClick={() => handleSort(c.key)}
                       >
-                        Edit
-                      </button>
-                      <button
-                        className="px-2 py-1 rounded bg-red-600 text-white"
-                        onClick={() => handleDelete(r.submission_id)}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                        {c.label}
+                        {sort.key === c.key && (sort.dir === "asc" ? " ▲" : " ▼")}
+                      </div>
+                      <input
+                        className="mt-1 border rounded w-full px-1"
+                        value={columnFilters[c.key] || ""}
+                        onChange={e => setColumnFilters(cf => ({ ...cf, [c.key]: e.target.value }))}
+                      />
+                    </th>
+                  ))}
+                  <th className="p-2 text-left">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map(r => {
+                  const left = daysLeft(r.date_handover);
+                  const leftStyle = (left === 0) ? { backgroundColor: "#fee2e2", color: "#991b1b", fontWeight: 600 } : {};
+                  return (
+                    <tr key={r.submission_id}>
+                      <td className="p-2"><input type="checkbox" checked={selected.includes(r.submission_id)} onChange={() => toggleSelect(r.submission_id)} /></td>
+                      <td>{r.first_name ?? "-"}</td>
+                      <td>{r.last_name ?? "-"}</td>
+                      <td>{r.email ?? "-"}</td>
+                      <td>{r.phone ?? "-"}</td>
+                      <td>{r.address || "-"}</td>
+                      <td>{r.city || "-"}</td>
+                      <td>{r.pickup_city ?? "-"}</td>
+                      <td>{fmtDateDMY(r.created_at)}</td>
+                      <td>{fmtDateDMY(r.date_contacted)}</td>
+                      <td>{fmtDateDMY(r.date_handover)}</td>
+                      <td style={leftStyle}>{left === "" ? "" : left}</td>
+                      <td>{r.model ?? "-"}</td>
+                      <td>{r.serial_number ?? "-"}</td>
+                      <td>{r.note ?? "-"}</td>
+                      <td className="p-2 whitespace-nowrap">
+                        <button
+                          className="px-2 py-1 rounded bg-blue-600 text-white mr-2"
+                          onClick={() => { setEditing(r); setShowEdit(true); }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="px-2 py-1 rounded bg-red-600 text-white"
+                          onClick={() => handleDelete(r.submission_id)}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {showEdit && editing && (
