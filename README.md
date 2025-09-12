@@ -12,5 +12,5 @@ email, phone, address, city, postal_code, pickup_city, days_left, model, note,
 form_name
 ```
 
-Populate this template and import it using the **Import CSV** button. The
-importer expects this exact format.
+Populate this template and import it using the **Upload XLSX** or **Import CSV**
+buttons. The importer expects this exact format.

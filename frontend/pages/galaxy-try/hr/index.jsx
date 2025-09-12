@@ -36,6 +36,7 @@ function GalaxyTryHRPage() {
     const [fHandover, setFHandover] = useState("");   // YYYY-MM-DD
 
   const fileRef = useRef(null);
+  const xlsxRef = useRef(null);
 
   // pomoćne
   function toDateOnly(v) {
@@ -306,6 +307,22 @@ function GalaxyTryHRPage() {
             onClick={() => fileRef.current?.click()}
           >
             Import CSV
+          </button>
+          <input
+            ref={xlsxRef}
+            type="file"
+            accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+            className="hidden"
+            onChange={async (e) => {
+              await handleImportGalaxyCsv(e);
+              await load();
+            }}
+          />
+          <button
+            className="px-3 py-2 bg-green-600 text-white rounded"
+            onClick={() => xlsxRef.current?.click()}
+          >
+            Upload XLSX
           </button>
         </div>
       </div>
