@@ -34,6 +34,9 @@ const ALIASES = {
   "days left": "days_left", "daysleft": "days_left",
 };
 
+// uklanjanje svih nedozvoljenih znakova iz IMEI-a
+const cleanImei = v => (v ? String(v).replace(/[^0-9]/g, "").slice(0,15) : v);
+
 function guessMap(headers, kind) {
   const target = kind === "devices" ? DEVICE_FIELDS : LEAD_FIELDS;
   const map = {};
@@ -89,7 +92,12 @@ export default function CsvImportModal({ onClose, countryCode = "HR", kind = "de
       const o = {};
       for (const [src, dst] of Object.entries(map)) {
         if (!dst) continue;
-        o[dst] = r[src] ?? null;
+        if (dst === "imei") {
+          const cleaned = cleanImei(r[src]);
+          o[dst] = cleaned || null;
+        } else {
+          o[dst] = r[src] ?? null;
+        }
       }
       return o;
     });
