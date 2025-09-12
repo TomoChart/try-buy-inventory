@@ -1,6 +1,7 @@
 // frontend/components/CsvImportModal.jsx
 import { useEffect, useMemo, useState } from "react";
 import Papa from "papaparse";
+import * as XLSX from "xlsx";
 import { API, getToken } from "../lib/auth";
 
 const DEVICE_FIELDS = [
@@ -68,17 +69,33 @@ export default function CsvImportModal({ onClose, countryCode = "HR", kind = "de
 
   function handleFile(f) {
     setFile(f);
-    Papa.parse(f, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (res) => {
-        const data = Array.isArray(res.data) ? res.data : [];
-        setRows(data);
-        const hdrs = res.meta?.fields || Object.keys(data[0] || {});
+    const ext = f.name.split('.').pop().toLowerCase();
+    if (ext === "xlsx" || ext === "xls") {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: "array" });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet, { defval: null });
+        setRows(json);
+        const hdrs = json.length ? Object.keys(json[0]) : [];
         setHeaders(hdrs);
         setMap(guessMap(hdrs, kind));
-      }
-    });
+      };
+      reader.readAsArrayBuffer(f);
+    } else {
+      Papa.parse(f, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (res) => {
+          const data = Array.isArray(res.data) ? res.data : [];
+          setRows(data);
+          const hdrs = res.meta?.fields || Object.keys(data[0] || {});
+          setHeaders(hdrs);
+          setMap(guessMap(hdrs, kind));
+        }
+      });
+    }
   }
 
   const targetFields = kind === "devices" ? DEVICE_FIELDS : LEAD_FIELDS;
@@ -130,7 +147,7 @@ export default function CsvImportModal({ onClose, countryCode = "HR", kind = "de
         <div className="mb-3">
           <input
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,text/csv,.xlsx,.xls"
             onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])}
           />
           <div className="mt-2 flex items-center gap-3 text-sm">
