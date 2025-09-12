@@ -19,6 +19,7 @@ function GalaxyTrySIPage() {
   const [selected, setSelected] = useState([]);
   const [columnFilters, setColumnFilters] = useState({});
   const [sort, setSort] = useState({ key: "", dir: "asc" });
+  const [openMenu, setOpenMenu] = useState(null);
 
   // koji red editiramo
   const [editingId, setEditingId] = useState(null);
@@ -116,10 +117,6 @@ function GalaxyTrySIPage() {
   }
 
   useEffect(() => { load(); }, []);
-
-  function handleSort(key) {
-    setSort(s => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
-  }
 
   const filtered = rows.filter(r => {
     for (const [k, v] of Object.entries(columnFilters)) {
@@ -249,19 +246,50 @@ function GalaxyTrySIPage() {
                 <tr>
                   <th className="p-2 text-left"><input type="checkbox" checked={allSelected} onChange={toggleSelectAll} /></th>
                   {columns.map(c => (
-                    <th key={c.key} className="p-2 text-left">
-                      <div
-                        className="flex items-center cursor-pointer select-none"
-                        onClick={() => handleSort(c.key)}
-                      >
+                    <th key={c.key} className="relative p-2 text-left">
+                      <div className="flex items-center">
                         {c.label}
-                        {sort.key === c.key && (sort.dir === "asc" ? " ▲" : " ▼")}
+                        {sort.key === c.key && (sort.dir === 'asc' ? ' ▲' : ' ▼')}
+                        <button
+                          className="ml-1 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenu(openMenu === c.key ? null : c.key);
+                          }}
+                        >
+                          ▾
+                        </button>
                       </div>
-                      <input
-                        className="mt-1 border rounded w-full px-1"
-                        value={columnFilters[c.key] || ""}
-                        onChange={e => setColumnFilters(cf => ({ ...cf, [c.key]: e.target.value }))}
-                      />
+                      {openMenu === c.key && (
+                        <div className="absolute z-10 mt-1 bg-white border rounded shadow-md p-2 w-40">
+                          <button
+                            className="block w-full text-left px-2 py-1 hover:bg-gray-100"
+                            onClick={() => {
+                              setSort({ key: c.key, dir: 'asc' });
+                              setOpenMenu(null);
+                            }}
+                          >
+                            Sort A to Z
+                          </button>
+                          <button
+                            className="block w-full text-left px-2 py-1 hover:bg-gray-100"
+                            onClick={() => {
+                              setSort({ key: c.key, dir: 'desc' });
+                              setOpenMenu(null);
+                            }}
+                          >
+                            Sort Z to A
+                          </button>
+                          <div className="mt-2">
+                            <input
+                              className="border rounded w-full px-1 py-0.5"
+                              placeholder="Text filter"
+                              value={columnFilters[c.key] || ''}
+                              onChange={e => setColumnFilters(cf => ({ ...cf, [c.key]: e.target.value }))}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </th>
                   ))}
                   <th className="p-2 text-left">Actions</th>
