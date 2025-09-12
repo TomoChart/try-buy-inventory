@@ -410,11 +410,19 @@ function GalaxyTryHRPage() {
             <h3 className="font-semibold text-lg mb-3">
               Edit — {editing.submission_id}
             </h3>
-            <EditForm
-              initial={editing}
-              onCancel={() => { setShowEdit(false); setEditing(null); }}
-              onSaved={async () => { setShowEdit(false); setEditing(null); await load(); }}
-            />
+              <EditForm
+                initial={editing}
+                onCancel={() => { setShowEdit(false); setEditing(null); }}
+                onSaved={async (updated) => {
+                  setShowEdit(false);
+                  setEditing(null);
+                  if (updated) {
+                    setRows(r => r.map(x => x.submission_id === updated.submission_id ? normalizeRow(updated) : x));
+                  } else {
+                    await load();
+                  }
+                }}
+              />
           </div>
         </div>
       )}
@@ -589,9 +597,9 @@ function EditForm({ initial, onCancel, onSaved }) {
           date_contacted: form.contacted ? new Date().toISOString() : null,
         })
       });
-      const data = await res.json().catch(()=> ({}));
-      if (!res.ok) throw new Error(data?.error || "Save failed");
-      await onSaved();
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || "Save failed");
+        await onSaved(data.item || null);
     } catch (e) {
       alert(e.message);
     } finally {
