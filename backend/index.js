@@ -600,81 +600,114 @@ app.get('/admin/galaxy-try/:code/list',
       }
     );
 
-// === GALAXY TRY HR: CSV import (upsert) ===
-app.post('/admin/galaxy-try/hr/import', requireAuth, requireRole('country_admin','superadmin'), async (req, res) => {
-  try {
-    const { rows } = req.body;
-    if (!Array.isArray(rows) || !rows.length) {
-      return res.status(400).json({ error: 'No rows provided' });
-    }
-    let upserted = 0;
-    for (const r of rows) {
-      if (!r.submission_id) continue;
-      // Upsert logika: pokušaj update, ako ne postoji onda insert
-      const qUpdate = `UPDATE leads_import SET
-        first_name = $2, last_name = $3, email = $4, phone = $5, address = $6, city = $7, pickup_city = $8,
-        contacted = $9, handover_at = $10, days_left = $11, model = $12, imei = $13, note = $14
-        WHERE submission_id = $1 AND country_code = 'HR'`;
-      const vals = [
-        r.submission_id, r.first_name, r.last_name, r.email, r.phone, r.address, r.city, r.pickup_city,
-        r.contacted, r.handover_at, r.days_left, r.model, r.imei, r.note
-      ];
-      const result = await prisma.$executeRawUnsafe(qUpdate, ...vals);
-      if (result === 0) {
-        // Insert ako ne postoji
-        const qInsert = `INSERT INTO leads_import (
-          submission_id, country_code, first_name, last_name, email, phone, address, city, pickup_city,
-          contacted, handover_at, days_left, model, imei, note
-        ) VALUES ($1,'HR',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`;
-        await prisma.$executeRawUnsafe(qInsert, r.submission_id, r.first_name, r.last_name, r.email, r.phone, r.address, r.city, r.pickup_city,
-          r.contacted, r.handover_at, r.days_left, r.model, r.imei, r.note);
+// === GALAXY TRY HR: Import (CSV/XLSX) — upsert s created_at + normalizacija ===
+app.post('/admin/galaxy-try/hr/import',
+  requireAuth, requireRole('country_admin','superadmin'),
+  async (req, res) => {
+    try {
+      const { rows } = req.body || {};
+      if (!Array.isArray(rows) || !rows.length) {
+        return res.status(400).json({ error: 'No rows provided' });
       }
-      upserted++;
-    }
-    res.json({ upserted });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Import error' });
-  }
-});
 
-// === GALAXY TRY HR: CSV import (upsert) ===
-app.post('/admin/galaxy-try/hr/import', requireAuth, requireRole('country_admin','superadmin'), async (req, res) => {
-  try {
-    const { rows } = req.body;
-    if (!Array.isArray(rows) || !rows.length) {
-      return res.status(400).json({ error: 'No rows provided' });
-    }
-    let upserted = 0;
-    for (const r of rows) {
-      if (!r.submission_id) continue;
-      // Upsert logika: pokušaj update, ako ne postoji onda insert
-      const qUpdate = `UPDATE leads_import SET
-        first_name = $2, last_name = $3, email = $4, phone = $5, address = $6, city = $7, pickup_city = $8,
-        contacted = $9, handover_at = $10, days_left = $11, model = $12, imei = $13, note = $14
-        WHERE submission_id = $1 AND country_code = 'HR'`;
-      const vals = [
-        r.submission_id, r.first_name, r.last_name, r.email, r.phone, r.address, r.city, r.pickup_city,
-        r.contacted, r.handover_at, r.days_left, r.model, r.imei, r.note
-      ];
-      const result = await prisma.$executeRawUnsafe(qUpdate, ...vals);
-      if (result === 0) {
-        // Insert ako ne postoji
-        const qInsert = `INSERT INTO leads_import (
-          submission_id, country_code, first_name, last_name, email, phone, address, city, pickup_city,
-          contacted, handover_at, days_left, model, imei, note
-        ) VALUES ($1,'HR',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`;
-        await prisma.$executeRawUnsafe(qInsert, r.submission_id, r.first_name, r.last_name, r.email, r.phone, r.address, r.city, r.pickup_city,
-          r.contacted, r.handover_at, r.days_left, r.model, r.imei, r.note);
+      const isoOrNull = (v) => {
+        if (v == null || v === '') return null;
+        const d = new Date(v);
+        return isNaN(d) ? null : d.toISOString();
+      };
+      const numOrNull = (v) => (v === '' || v == null ? null : Number.isFinite(Number(v)) ? Number(v) : null);
+      const strOrNull = (v) => (v == null || v === '' ? null : String(v));
+      const imeiStr   = (v) => (v == null ? null : String(v).replace(/\s+/g,''));
+
+      let upserted = 0;
+
+      for (const r of rows) {
+        if (!r.submission_id) continue;
+
+        // Normaliziraj ulaze
+        const payload = {
+          first_name:  strOrNull(r.first_name),
+          last_name:   strOrNull(r.last_name),
+          email:       strOrNull(r.email),
+          phone:       strOrNull(r.phone),
+          address:     strOrNull(r.address),
+          city:        strOrNull(r.city),
+          pickup_city: strOrNull(r.pickup_city),
+          created_at:  isoOrNull(r.created_at),      // ← NOVO: podržano iz uploada
+          contacted:   isoOrNull(r.contacted),
+          handover_at: isoOrNull(r.handover_at),
+          days_left:   numOrNull(r.days_left),
+          model:       strOrNull(r.model),
+          imei:        imeiStr(r.imei),
+          note:        strOrNull(r.note),
+        };
+
+        // 1) UPDATE po (submission_id, HR) — uključuje created_at
+        const qUpdate = `
+          UPDATE leads_import SET
+            first_name  = COALESCE($2, first_name),
+            last_name   = COALESCE($3, last_name),
+            email       = COALESCE($4, email),
+            phone       = COALESCE($5, phone),
+            address     = COALESCE($6, address),
+            city        = COALESCE($7, city),
+            pickup_city = COALESCE($8, pickup_city),
+            created_at  = COALESCE($9, created_at),
+            contacted   = COALESCE($10, contacted),
+            handover_at = COALESCE($11, handover_at),
+            days_left   = COALESCE($12, days_left),
+            model       = COALESCE($13, model),
+            imei        = COALESCE($14, imei),
+            note        = COALESCE($15, note),
+            updated_at  = NOW()
+          WHERE submission_id = $1 AND country_code = 'HR'
+        `;
+        const valsU = [
+          r.submission_id,
+          payload.first_name, payload.last_name, payload.email, payload.phone,
+          payload.address, payload.city, payload.pickup_city,
+          payload.created_at, payload.contacted, payload.handover_at,
+          payload.days_left, payload.model, payload.imei, payload.note
+        ];
+
+        const updated = await prisma.$executeRawUnsafe(qUpdate, ...valsU);
+
+        // 2) Ako nije postojalo — INSERT (s created_at)
+        if (!updated) {
+          const qInsert = `
+            INSERT INTO leads_import (
+              submission_id, country_code,
+              first_name,last_name,email,phone,address,city,pickup_city,
+              created_at,contacted,handover_at,days_left,model,imei,note,
+              updated_at
+            ) VALUES (
+              $1,'HR',
+              $2,$3,$4,$5,$6,$7,$8,
+              $9,$10,$11,$12,$13,$14,$15,
+              NOW()
+            )
+          `;
+          const valsI = [
+            r.submission_id,
+            payload.first_name, payload.last_name, payload.email, payload.phone,
+            payload.address, payload.city, payload.pickup_city,
+            payload.created_at, payload.contacted, payload.handover_at,
+            payload.days_left, payload.model, payload.imei, payload.note
+          ];
+          await prisma.$executeRawUnsafe(qInsert, ...valsI);
+        }
+
+        upserted++;
       }
-      upserted++;
+
+      return res.json({ upserted });
+    } catch (e) {
+      console.error('Import error', e);
+      return res.status(500).json({ error: 'Import error' });
     }
-    res.json({ upserted });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Import error' });
   }
-});
+);
+
 
 // 6) start server
 const PORT = Number(process.env.PORT || 8080);

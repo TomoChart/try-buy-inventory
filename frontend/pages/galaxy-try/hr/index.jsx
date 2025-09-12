@@ -4,6 +4,7 @@ import { API, getToken, handleUnauthorized } from "../../../lib/auth";
 import CsvImportModal from "../../../components/CsvImportModal";
 import { useRouter } from "next/router";
 import HomeButton from '../../../components/HomeButton';
+import * as XLSX from "xlsx";
 import Papa from "papaparse";
 
 
@@ -270,7 +271,7 @@ function GalaxyTryHRPage() {
           <input
             ref={fileRef}
             type="file"
-            accept=".csv"
+            accept=".csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
             className="hidden"
             onChange={async (e) => {
               await handleImportGalaxyCsv(e); // postojeći handler u istom fileu
@@ -476,37 +477,30 @@ function daysLeft(handover_at) {
   return 14 - diffDays; // ako je danas = handover → 14
 }
 
-
-// === Galaxy Try CSV import (UPsert) ===
-// zahtijeva: TOKEN iz getToken(), i `code` (HR/SI/RS) koji već koristiš na ekranu
-
-// === CSV mapping (leads) ===
+// --- CSV/XLSX import (auto) ---
 const LEAD_FIELDS = [
   "submission_id","created_at","first_name","last_name","email","phone",
   "address","city","postal_code","pickup_city","contacted",
   "handover_at","days_left","model","imei","note","form_name",
 ];
 
+// aliasi za naslove kolona (ENG + tvoje stvarno zaglavlje)
 const ALIASES = {
-  // devices (zadrži radi kompatibilnosti)
-  "s/n": "imei", "sn": "imei", "serial": "imei",
-  "imei": "imei", "imei1": "imei", "imei_1": "imei", "imei 1": "imei",
-  "control": "control_no", "control no": "control_no", "control_number": "control_no",
-  "colour": "color",
-
-  // leads (ENG varijante)
-  "e-mail": "email", "zip": "postal_code",
+  "e-mail": "email",
+  "zip": "postal_code",
   "created at": "created_at",
   "handover at": "handover_at",
-  "date handover": "handover_at", "date_handover": "handover_at",
-  "date contacted": "contacted", "date_contacted": "contacted",
+  "date handover": "handover_at",
+  "date_handover": "handover_at",
+  "date contacted": "contacted",
+  "date_contacted": "contacted",
   "contacted at": "contacted",
-
-  // 🔧 novo – tvoj stvarni header:
-  "contacted yes-no": "contacted",
-
-  // ostali:
-  "days left": "days_left", "daysleft": "days_left",
+  "contacted yes-no": "contacted",     // ← tvoje zaglavlje
+  "days left": "days_left",
+  "daysleft": "days_left",
+  // devices aliasi ostavljeni radi kompatibilnosti
+  "s/n": "imei", "sn": "imei", "serial": "imei",
+  "imei1": "imei", "imei_1": "imei", "imei 1": "imei"
 };
 
 function guessMap(headers) {
@@ -517,69 +511,97 @@ function guessMap(headers) {
     const alias = ALIASES[key];
     if (alias && LEAD_FIELDS.includes(alias)) { map[raw] = alias; return; }
     if (LEAD_FIELDS.includes(key)) { map[raw] = key; return; }
-    if (key === "s/n" || key === "s\\n") map[raw] = "imei";
-    else if (key === "imei1") map[raw] = "imei";
+    if (key === "s/n" || key === "s\\n" || key === "imei1") map[raw] = "imei";
   });
   return map;
 }
 
-function toIsoOrNullFromYesNo(v) {
-  if (v == null) return null;
-  const s = String(v).trim().toLowerCase();
-  if (["yes","da","true","1"].includes(s)) return new Date().toISOString();
-  if (["no","ne","false","0",""].includes(s)) return null;
-  // ako je već datum, pokušaj pročitati
+// Excel numerički datum -> ISO
+function excelDateToISO(v) {
+  if (v == null || v === "") return null;
+  if (typeof v === "number") {
+    const o = XLSX.SSF.parse_date_code(v);
+    if (!o) return null;
+    const d = new Date(Date.UTC(o.y, o.m - 1, o.d, o.H || 0, o.M || 0, o.S || 0));
+    return d.toISOString();
+  }
   const d = new Date(v);
   return isNaN(d) ? null : d.toISOString();
 }
 
-async function handleImportGalaxyCsv(e) {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  try {
-    const parsed = await new Promise((resolve, reject) => {
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        // ❌ makni custom delimiter; pusti autodetekciju
-        complete: resolve,
-        error: reject,
-      });
-    });
+// IMEI uvijek kao string (bez znanstvene notacije, bez gubitka nula)
+function toImeiString(val) {
+  if (val == null) return "";
+  return String(val).trim().replace(/\s+/g, "");
+}
 
-    const data = Array.isArray(parsed.data) ? parsed.data : [];
-    const headers = parsed.meta?.fields || Object.keys(data[0] || {});
+// Contacted Yes/No -> ISO ili null
+function contactedToISO(val) {
+  if (val == null) return null;
+  const s = String(val).trim().toLowerCase();
+  if (["yes","true","da","1"].includes(s)) return new Date().toISOString();
+  if (["no","false","ne","0",""].includes(s)) return null;
+  // ako je već datum:
+  return excelDateToISO(val);
+}
+
+async function handleImportGalaxyCsv(e) {
+  const f = e.target.files?.[0];
+  if (!f) return;
+  try {
+    let rows = [];
+    const name = (f.name || "").toLowerCase();
+
+    if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+      // XLSX put
+      const buf = await f.arrayBuffer();
+      const wb = XLSX.read(buf, { cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(ws, { defval: "" }); // sve vrijednosti, bez undefined
+      rows = json;
+    } else {
+      // CSV put (prepusti autodetekciji delimiter)
+      const parsed = await new Promise((resolve, reject) => {
+        Papa.parse(f, { header: true, skipEmptyLines: true, complete: resolve, error: reject });
+      });
+      rows = Array.isArray(parsed.data) ? parsed.data : [];
+    }
+
+    if (!rows.length) { alert("Nema redaka u datoteci."); return; }
+
+    const headers = Object.keys(rows[0] || {});
     const map = guessMap(headers);
 
-    const normRows = data
-      .map(r => {
-        const o = {};
-        for (const [src, dst] of Object.entries(map)) {
-          if (!dst) continue;
-          let val = r[src] ?? "";
-          if (dst === "contacted") val = toIsoOrNullFromYesNo(val);
-          o[dst] = val;
-        }
-        return o;
-      })
-      .filter(r => r.submission_id);
+    // normaliziraj + konverzije
+    const normRows = rows.map(r => {
+      const out = {};
+      for (const [src, dst] of Object.entries(map)) {
+        let v = r[src];
+        if (dst === "imei") v = toImeiString(v);
+        else if (dst === "created_at" || dst === "handover_at") v = excelDateToISO(v);
+        else if (dst === "contacted") v = contactedToISO(v);
+        else if (dst === "days_left") v = (v === "" ? null : Number(v));
+        else v = v ?? "";
+        out[dst] = v;
+      }
+      return out;
+    }).filter(r => r.submission_id);
 
-    if (!normRows.length) { alert('Nema valjanih redova (submission_id nedostaje).'); return; }
+    if (!normRows.length) { alert("Nema valjanih redova (submission_id nedostaje)."); return; }
 
     const token = getToken();
-    if (!token) { alert('Nema tokena. Prijavi se ponovno.'); return; }
+    if (!token) { alert("Nema tokena. Prijavi se ponovno."); return; }
 
     const endpoint = `${API}/admin/galaxy-try/hr/import?mode=upsert`;
     const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ rows: normRows })
     });
+    const dataRes = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(dataRes?.error || "Import failed");
 
-    const dataRes = await res.json().catch(()=> ({}));
-    if (!res.ok) throw new Error(dataRes?.error || 'Import failed');
-
-    alert(`Import gotov. Upsertano: ${dataRes?.upserted ?? 'n/a'}`);
+    alert(`Import gotov. Upsertano: ${dataRes?.upserted ?? "n/a"}`);
   } catch (err) {
     console.error(err);
     alert(`Greška pri importu: ${err.message}`);
