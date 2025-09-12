@@ -500,7 +500,7 @@ async function handleImportGalaxyCsv(e) {
     const normRows = data.map(r => {
       const g = (k) => {
         const keys = Object.keys(r);
-        const hit = keys.find(x => String(x).toLowerCase() === k);
+        const hit = keys.find(x => String(x).trim().toLowerCase() === k);
         return hit ? r[hit] : "";
       };
       const getAny = (...alts) => {
