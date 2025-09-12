@@ -480,6 +480,7 @@ function daysLeft(handover_at) {
 // === Galaxy Try CSV import (UPsert) ===
 // zahtijeva: TOKEN iz getToken(), i `code` (HR/SI/RS) koji već koristiš na ekranu
 
+// === CSV mapping (leads) ===
 const LEAD_FIELDS = [
   "submission_id","created_at","first_name","last_name","email","phone",
   "address","city","postal_code","pickup_city","contacted",
@@ -487,19 +488,24 @@ const LEAD_FIELDS = [
 ];
 
 const ALIASES = {
-  // devices
+  // devices (zadrži radi kompatibilnosti)
   "s/n": "imei", "sn": "imei", "serial": "imei",
   "imei": "imei", "imei1": "imei", "imei_1": "imei", "imei 1": "imei",
   "control": "control_no", "control no": "control_no", "control_number": "control_no",
   "colour": "color",
-  // leads
-  "e-mail": "email", "e pošta": "email", "e_posta": "email", "e posta": "email",
-  "zip": "postal_code",
+
+  // leads (ENG varijante)
+  "e-mail": "email", "zip": "postal_code",
   "created at": "created_at",
   "handover at": "handover_at",
   "date handover": "handover_at", "date_handover": "handover_at",
   "date contacted": "contacted", "date_contacted": "contacted",
   "contacted at": "contacted",
+
+  // 🔧 novo – tvoj stvarni header:
+  "contacted yes-no": "contacted",
+
+  // ostali:
   "days left": "days_left", "daysleft": "days_left",
 };
 
@@ -517,6 +523,16 @@ function guessMap(headers) {
   return map;
 }
 
+function toIsoOrNullFromYesNo(v) {
+  if (v == null) return null;
+  const s = String(v).trim().toLowerCase();
+  if (["yes","da","true","1"].includes(s)) return new Date().toISOString();
+  if (["no","ne","false","0",""].includes(s)) return null;
+  // ako je već datum, pokušaj pročitati
+  const d = new Date(v);
+  return isNaN(d) ? null : d.toISOString();
+}
+
 async function handleImportGalaxyCsv(e) {
   const file = e.target.files?.[0];
   if (!file) return;
@@ -525,7 +541,7 @@ async function handleImportGalaxyCsv(e) {
       Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
-        delimiter: "",
+        // ❌ makni custom delimiter; pusti autodetekciju
         complete: resolve,
         error: reject,
       });
@@ -534,12 +550,15 @@ async function handleImportGalaxyCsv(e) {
     const data = Array.isArray(parsed.data) ? parsed.data : [];
     const headers = parsed.meta?.fields || Object.keys(data[0] || {});
     const map = guessMap(headers);
+
     const normRows = data
       .map(r => {
         const o = {};
         for (const [src, dst] of Object.entries(map)) {
           if (!dst) continue;
-          o[dst] = r[src] ?? "";
+          let val = r[src] ?? "";
+          if (dst === "contacted") val = toIsoOrNullFromYesNo(val);
+          o[dst] = val;
         }
         return o;
       })
