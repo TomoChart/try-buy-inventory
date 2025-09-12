@@ -19,13 +19,18 @@ const LEAD_FIELDS = [
 // heuristika za automatsko mapiranje
 const ALIASES = {
   // devices
-  "s/n": "serial_number", "sn": "serial_number", "serial": "serial_number",
-  "imei1": "imei", "imei_1": "imei", "imei 1": "imei",
+  "s/n": "serial_number", "sn": "serial_number", "serial": "serial_number", "s_n": "serial_number",
   "control": "control_no", "control no": "control_no", "control_number": "control_no",
   "colour": "color",
   // leads
   "e-mail": "email", "e pošta": "email", "e_posta": "email", "e posta": "email",
   "zip": "postal_code",
+  "created at": "created_at",
+  "handover at": "date_handover",
+  "imei": "serial_number",
+  "imei1": "serial_number",
+  "imei_1": "serial_number",
+  "imei 1": "serial_number",
 };
 
 function guessMap(headers, kind) {
@@ -46,7 +51,6 @@ function guessMap(headers, kind) {
     }
     // special cases
     if (key === "s/n" || key === "s\\n") map[raw] = "serial_number";
-    else if (key === "imei1") map[raw] = "imei";
   });
   return map;
 }
