@@ -6,14 +6,14 @@ import Papa from "papaparse";
 import HomeButton from '../../components/HomeButton';
 
 const ALL_COLUMNS = [
-  { key: "Model", label: "Model", always: true },
-  { key: "Purpose", label: "Purpose" },
-  { key: "Ownership", label: "Ownership", always: true },
-  { key: "S/N", label: "Serial Number" },
-  { key: "IMEI", label: "IMEI", always: true },
-  { key: "Color", label: "Color" },
-  { key: "Status", label: "Status", always: true },
-  { key: "Location", label: "Location", always: true },
+  { key: "Model", label: "Model", always: true, get: r => r.Model ?? "-" },
+  { key: "Purpose", label: "Purpose", get: r => r.Purpose ?? "-" },
+  { key: "Ownership", label: "Ownership", always: true, get: r => r.Ownership ?? "-" },
+  { key: "S/N", label: "Serial Number", get: r => r.serial_number ?? r["Serial Number"] ?? r["S/N"] ?? "-" },
+  { key: "IMEI", label: "IMEI", always: true, get: r => (r.IMEI ?? "").toString().replace(/\.0$/, "") || "-" },
+  { key: "Color", label: "Color", get: r => r.Color ?? "-" },
+  { key: "Status", label: "Status", always: true, get: r => r.Status ?? "-" },
+  { key: "Location", label: "Location", always: true, get: r => r.Location ?? "-" },
 ];
 
 function DevicesPage() {
@@ -28,6 +28,10 @@ function DevicesPage() {
   // filters
   const [q, setQ] = useState("");
   const [f, setF] = useState({ status: "", model: "", purpose: "", ownership: "", color: "", city: "" });
+
+  const [selected, setSelected] = useState([]);
+  const [colFilters, setColFilters] = useState({});
+  const [sort, setSort] = useState({ key: null, dir: "asc" });
 
   // columns visibility
   const [visible, setVisible] = useState(() => {
@@ -377,6 +381,62 @@ function DevicesPage() {
   if (err) return <div className="p-6"><HomeButton /><div className="text-red-600">{err}</div></div>;
 
   const headers = ALL_COLUMNS.filter(c => visible[c.key]);
+  const filteredCols = filtered.filter(r =>
+    headers.every(h => {
+      const val = String(h.get(r) || "").toLowerCase();
+      const fVal = String(colFilters[h.key] || "").toLowerCase();
+      return val.includes(fVal);
+    })
+  );
+  const sorted = [...filteredCols].sort((a, b) => {
+    if (!sort.key) return 0;
+    const h = ALL_COLUMNS.find(c => c.key === sort.key);
+    const va = h ? String(h.get(a) || "") : "";
+    const vb = h ? String(h.get(b) || "") : "";
+    if (va < vb) return sort.dir === "asc" ? -1 : 1;
+    if (va > vb) return sort.dir === "asc" ? 1 : -1;
+    return 0;
+  });
+  const allSelected = selected.length > 0 && selected.length === sorted.length;
+
+  function toggleSort(key) {
+    setSort(s => ({ key, dir: s.key === key && s.dir === "asc" ? "desc" : "asc" }));
+  }
+  function toggleSelect(k) {
+    setSelected(sel => sel.includes(k) ? sel.filter(x => x !== k) : [...sel, k]);
+  }
+  function toggleSelectAll() {
+    setSelected(allSelected ? [] : sorted.map(r => r.serial_number || r["Serial Number"] || r["S/N"] || r.IMEI));
+  }
+  async function handleDelete(serial, skipConfirm = false) {
+    try {
+      if (!serial) return;
+      if (!skipConfirm && !confirm(`Delete device ${serial}?`)) return;
+      const r = await fetch(`${API}/admin/devices/${code.toLowerCase()}/${encodeURIComponent(serial)}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (!r.ok && r.status !== 204) {
+        const txt = await r.text();
+        alert(`Delete failed (${r.status})\n${txt}`);
+        return;
+      }
+      setRows(prev => prev.filter(d => {
+        const k = d.serial_number || d["Serial Number"] || d["S/N"] || d.IMEI;
+        return k !== serial;
+      }));
+      setSelected(sel => sel.filter(k => k !== serial));
+    } catch (e) {
+      console.error('delete error', e);
+      alert('Greška pri brisanju.');
+    }
+  }
+  async function deleteSelected() {
+    if (!selected.length) return;
+    if (!confirm(`Delete ${selected.length} selected?`)) return;
+    for (const s of selected) await handleDelete(s, true);
+    setSelected([]);
+  }
 
   return (
     <div
@@ -403,58 +463,91 @@ function DevicesPage() {
         <span className="text-xs opacity-60">Očekivani headeri: Model, Purpose, Ownership, Serial Number, IMEI, Control No, Color, Status, Location, City, Loan name, LeadID, Comment</span>
       </div>
 
-      <ColumnToggles />
-      <FilterBar />
+        <ColumnToggles />
+        <FilterBar />
+        {selected.length > 0 && (
+          <div className="mb-2">
+            <button
+              className="px-3 py-1 rounded bg-red-600 text-white"
+              onClick={deleteSelected}
+            >
+              Delete selected ({selected.length})
+            </button>
+          </div>
+        )}
 
-      <div className="overflow-x-auto bg-white rounded shadow">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-100">
-            <tr>
-              {headers.map(h => <th key={h.key} className="text-left p-2">{h.label}</th>)}
-              <th className="text-left p-2">Akcije</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map(r => {
-              const key = r.serial_number || r["Serial Number"] || r["S/N"] || r.IMEI;
-              return (
-                <Fragment key={key}>
-                  <tr
-                    key={key}
-                    className="border-t hover:bg-gray-50"
+        <div className="overflow-x-auto bg-white rounded shadow">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="p-2">
+                  <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} />
+                </th>
+                {headers.map(h => (
+                  <th
+                    key={h.key}
+                    className="text-left p-2 cursor-pointer"
+                    onClick={() => toggleSort(h.key)}
                   >
-                    <td className="p-2">{r.Model ?? "-"}</td>
-                    <td className="p-2">{r.Purpose ?? "-"}</td>
-                    <td className="p-2">{r.Ownership ?? "-"}</td>
-                    <td className="p-2">{r.serial_number ?? r["Serial Number"] ?? r["S/N"] ?? "-"}</td>
-                    <td className="p-2">{(r.IMEI ?? "").toString().replace(/\.0$/, "") || "-"}</td>
-                    <td className="p-2">{r.Color ?? "-"}</td>
-                    <td className="p-2">{r.Status ?? "-"}</td>
-                    <td className="p-2">{r.Location ?? "-"}</td>
-                    <td className="p-2 flex gap-2">
-                      <button className="px-2 py-1 rounded bg-blue-600 text-white" onClick={() => toggleExpand(key)}>
-                        {expanded === key ? "Sakrij" : "Detalji"}
-                      </button>
-                      <button className="px-2 py-1 rounded bg-amber-600 text-white" onClick={() => setEditing(r)}>Edit</button>
-                    </td>
-                  </tr>
-                  {expanded === key && (
-                    <tr className="bg-gray-50">
-                      <td colSpan={headers.length + 1} className="p-3">
-                        {!detail && <div>Učitavam detalje…</div>}
-                        {detail && detail.error && <div className="text-red-600">{detail.error}</div>}
-                        {detail && !detail.error && (
-                          <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(detail, null, 2)}</pre>
-                        )}
+                    {h.label}{sort.key === h.key ? (sort.dir === "asc" ? " ↑" : " ↓") : ""}
+                  </th>
+                ))}
+                <th className="text-left p-2">Akcije</th>
+              </tr>
+              <tr>
+                <th></th>
+                {headers.map(h => (
+                  <th key={h.key} className="p-1">
+                    <input
+                      className="border rounded px-1 py-0.5 w-full"
+                      value={colFilters[h.key] || ""}
+                      onChange={e => setColFilters(c => ({ ...c, [h.key]: e.target.value }))}
+                    />
+                  </th>
+                ))}
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map(r => {
+                const key = r.serial_number || r["Serial Number"] || r["S/N"] || r.IMEI;
+                return (
+                  <Fragment key={key}>
+                    <tr className="border-t hover:bg-gray-50">
+                      <td className="p-2">
+                        <input
+                          type="checkbox"
+                          checked={selected.includes(key)}
+                          onChange={() => toggleSelect(key)}
+                        />
+                      </td>
+                      {headers.map(h => (
+                        <td key={h.key} className="p-2">{h.get(r)}</td>
+                      ))}
+                      <td className="p-2 flex gap-2">
+                        <button className="px-2 py-1 rounded bg-blue-600 text-white" onClick={() => toggleExpand(key)}>
+                          {expanded === key ? "Sakrij" : "Detalji"}
+                        </button>
+                        <button className="px-2 py-1 rounded bg-amber-600 text-white" onClick={() => setEditing(r)}>Edit</button>
                       </td>
                     </tr>
-                  )}
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                    {expanded === key && (
+                      <tr className="bg-gray-50">
+                        <td colSpan={headers.length + 2} className="p-3">
+                          {!detail && <div>Učitavam detalje…</div>}
+                          {detail && detail.error && <div className="text-red-600">{detail.error}</div>}
+                          {detail && !detail.error && (
+                            <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(detail, null, 2)}</pre>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
       {editing && <EditModal item={editing} onClose={()=>setEditing(null)} />}
       {adding && <AddModal onClose={()=>setAdding(false)} />}

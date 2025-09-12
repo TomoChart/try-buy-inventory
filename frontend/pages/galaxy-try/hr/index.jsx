@@ -17,6 +17,27 @@ function GalaxyTryHRPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [adding, setAdding] = useState(false);
 
+  const [selected, setSelected] = useState([]);
+  const [filters, setFilters] = useState({});
+  const [sort, setSort] = useState({ key: null, dir: "asc" });
+
+  const columns = [
+    { key: "first_name", label: "First Name" },
+    { key: "last_name", label: "Last Name" },
+    { key: "email", label: "Email" },
+    { key: "phone", label: "Phone" },
+    { key: "address", label: "Address" },
+    { key: "city", label: "City" },
+    { key: "pickup_city", label: "Pickup City" },
+    { key: "created_at", label: "Created At" },
+    { key: "date_contacted", label: "Contacted At" },
+    { key: "date_handover", label: "Handover At" },
+    { key: "days_left", label: "Days left" },
+    { key: "model", label: "Model" },
+    { key: "serial_number", label: "Serial Number" },
+    { key: "note", label: "Note" },
+  ];
+
   // koji red editiramo
   const [editingId, setEditingId] = useState(null);
   // lokalna polja za edit
@@ -94,10 +115,10 @@ function GalaxyTryHRPage() {
       note:           r.note           ?? r["Note"]           ?? "",
     };
   }
- async function handleDelete(submissionId) {
+   async function handleDelete(submissionId, skipConfirm = false) {
     try {
       if (!submissionId) { alert('Nedostaje Submission ID.'); return; }
-      if (!confirm(`Obrisati zapis ${submissionId}?`)) return;
+      if (!skipConfirm && !confirm(`Obrisati zapis ${submissionId}?`)) return;
 
       const res = await fetch(`${API}/admin/galaxy-try/hr/${encodeURIComponent(submissionId)}`, {
         method: 'DELETE',
@@ -106,6 +127,7 @@ function GalaxyTryHRPage() {
 
       if (res.status === 204) {
         setRows(prev => prev.filter(r => r.submission_id !== submissionId));
+        setSelected(sel => sel.filter(id => id !== submissionId));
         return;
       }
       const txt = await res.text();
@@ -134,6 +156,39 @@ function GalaxyTryHRPage() {
   }
 
   useEffect(() => { load(); }, []);
+
+  const filteredRows = rows.filter(r =>
+    columns.every(c => {
+      const val = c.key === "days_left" ? String(daysLeft(r.date_handover)) : String(r[c.key] || "");
+      const fVal = String(filters[c.key] || "").toLowerCase();
+      return val.toLowerCase().includes(fVal);
+    })
+  );
+  const sortedRows = [...filteredRows].sort((a, b) => {
+    if (!sort.key) return 0;
+    const va = sort.key === "days_left" ? daysLeft(a.date_handover) : a[sort.key] || "";
+    const vb = sort.key === "days_left" ? daysLeft(b.date_handover) : b[sort.key] || "";
+    if (va < vb) return sort.dir === "asc" ? -1 : 1;
+    if (va > vb) return sort.dir === "asc" ? 1 : -1;
+    return 0;
+  });
+  const allSelected = selected.length > 0 && selected.length === sortedRows.length;
+
+  function toggleSort(key) {
+    setSort(s => ({ key, dir: s.key === key && s.dir === "asc" ? "desc" : "asc" }));
+  }
+  function toggleSelect(id) {
+    setSelected(sel => sel.includes(id) ? sel.filter(x => x !== id) : [...sel, id]);
+  }
+  function toggleSelectAll() {
+    setSelected(allSelected ? [] : sortedRows.map(r => r.submission_id));
+  }
+  async function deleteSelected() {
+    if (!selected.length) return;
+    if (!confirm(`Obrisati ${selected.length} zapisa?`)) return;
+    for (const id of selected) await handleDelete(id, true);
+    setSelected([]);
+  }
 
   return (
     <div
@@ -171,68 +226,98 @@ function GalaxyTryHRPage() {
         </div>
       </div>
 
-      {loading ? <div>Učitavam…</div> : err ? <div className="text-red-600">{err}</div> : (
-        <div className="overflow-x-auto bg-white rounded shadow">
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="p-2 text-left">First Name</th>
-                <th className="p-2 text-left">Last Name</th>
-                <th className="p-2 text-left">Email</th>
-                <th className="p-2 text-left">Phone</th>
-                <th className="p-2 text-left">Address</th>      {/* NOVO */}
-                <th className="p-2 text-left">City</th>         {/* NOVO */}
-                <th className="p-2 text-left">Pickup City</th>
-                <th className="p-2 text-left">Created At</th>
-                <th className="p-2 text-left">Contacted At</th>
-                <th className="p-2 text-left">Handover At</th>
-                <th className="p-2 text-left">Days left</th>    {/* NOVO */}
-                <th className="p-2 text-left">Model</th>
-                <th className="p-2 text-left">Serial Number</th>
-                <th className="p-2 text-left">Note</th>         {/* NOVO */}
-                <th className="p-2 text-left">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => {
-                const left = daysLeft(r.date_handover);
-                const leftStyle = (left === 0) ? { backgroundColor: "#fee2e2", color: "#991b1b", fontWeight: 600 } : {};
-                return (
-                  <tr key={r.submission_id}>
-                    <td>{r.first_name ?? "-"}</td>
-                    <td>{r.last_name ?? "-"}</td>
-                    <td>{r.email ?? "-"}</td>
-                    <td>{r.phone ?? "-"}</td>
-                    <td>{r.address || "-"}</td>
-                    <td>{r.city || "-"}</td>
-                    <td>{r.pickup_city ?? "-"}</td>
-                    <td>{fmtDateDMY(r.created_at)}</td>
-                    <td>{fmtDateDMY(r.date_contacted)}</td>
-                    <td>{fmtDateDMY(r.date_handover)}</td>
-                    <td style={leftStyle}>{left === "" ? "" : left}</td>
-                    <td>{r.model ?? "-"}</td>
-                    <td>{r.serial_number ?? "-"}</td>
-                    <td>{r.note ?? "-"}</td>
-                    <td className="p-2 whitespace-nowrap">
-                      <button
-                        className="px-2 py-1 rounded bg-blue-600 text-white mr-2"
-                        onClick={() => { setEditing(r); setShowEdit(true); }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="px-2 py-1 rounded bg-red-600 text-white"
-                        onClick={() => handleDelete(r.submission_id)}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        {loading ? <div>Učitavam…</div> : err ? <div className="text-red-600">{err}</div> : (
+        <>
+          {selected.length > 0 && (
+            <div className="mb-2">
+              <button
+                className="px-3 py-1 bg-red-600 text-white rounded"
+                onClick={deleteSelected}
+              >
+                Delete selected ({selected.length})
+              </button>
+            </div>
+          )}
+          <div className="overflow-x-auto bg-white rounded shadow">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="p-2 text-left">
+                    <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} />
+                  </th>
+                  {columns.map(c => (
+                    <th
+                      key={c.key}
+                      className="p-2 text-left cursor-pointer"
+                      onClick={() => toggleSort(c.key)}
+                    >
+                      {c.label}{sort.key === c.key ? (sort.dir === "asc" ? " ↑" : " ↓") : ""}
+                    </th>
+                  ))}
+                  <th className="p-2 text-left">Actions</th>
+                </tr>
+                <tr>
+                  <th></th>
+                  {columns.map(c => (
+                    <th key={c.key} className="p-1">
+                      <input
+                        className="border rounded px-1 py-0.5 w-full"
+                        value={filters[c.key] || ""}
+                        onChange={e => setFilters(f => ({ ...f, [c.key]: e.target.value }))}
+                      />
+                    </th>
+                  ))}
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedRows.map((r) => {
+                  const left = daysLeft(r.date_handover);
+                  const leftStyle = (left === 0) ? { backgroundColor: "#fee2e2", color: "#991b1b", fontWeight: 600 } : {};
+                  return (
+                    <tr key={r.submission_id}>
+                      <td className="p-2">
+                        <input
+                          type="checkbox"
+                          checked={selected.includes(r.submission_id)}
+                          onChange={() => toggleSelect(r.submission_id)}
+                        />
+                      </td>
+                      <td>{r.first_name ?? "-"}</td>
+                      <td>{r.last_name ?? "-"}</td>
+                      <td>{r.email ?? "-"}</td>
+                      <td>{r.phone ?? "-"}</td>
+                      <td>{r.address || "-"}</td>
+                      <td>{r.city || "-"}</td>
+                      <td>{r.pickup_city ?? "-"}</td>
+                      <td>{fmtDateDMY(r.created_at)}</td>
+                      <td>{fmtDateDMY(r.date_contacted)}</td>
+                      <td>{fmtDateDMY(r.date_handover)}</td>
+                      <td style={leftStyle}>{left === "" ? "" : left}</td>
+                      <td>{r.model ?? "-"}</td>
+                      <td>{r.serial_number ?? "-"}</td>
+                      <td>{r.note ?? "-"}</td>
+                      <td className="p-2 whitespace-nowrap">
+                        <button
+                          className="px-2 py-1 rounded bg-blue-600 text-white mr-2"
+                          onClick={() => { setEditing(r); setShowEdit(true); }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="px-2 py-1 rounded bg-red-600 text-white"
+                          onClick={() => handleDelete(r.submission_id)}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {showEdit && editing && (
