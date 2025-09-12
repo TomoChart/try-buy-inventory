@@ -484,21 +484,17 @@ const LEAD_FIELDS = [
   "handover_at","days_left","model","imei","note","form_name",
 ];
 
-// aliasi za naslove kolona (ENG + tvoje stvarno zaglavlje)
 const ALIASES = {
   "e-mail": "email",
   "zip": "postal_code",
   "created at": "created_at",
   "handover at": "handover_at",
-  "date handover": "handover_at",
-  "date_handover": "handover_at",
-  "date contacted": "contacted",
-  "date_contacted": "contacted",
+  "date handover": "handover_at", "date_handover": "handover_at",
+  "date contacted": "contacted", "date_contacted": "contacted",
   "contacted at": "contacted",
-  "contacted yes-no": "contacted",     // ← tvoje zaglavlje
-  "days left": "days_left",
-  "daysleft": "days_left",
-  // devices aliasi ostavljeni radi kompatibilnosti
+  "contacted yes-no": "contacted",   // ← tvoje stvarno zaglavlje
+  "days left": "days_left", "daysleft": "days_left",
+  // kompatibilnost s device CSV-ovima (ne smeta)
   "s/n": "imei", "sn": "imei", "serial": "imei",
   "imei1": "imei", "imei_1": "imei", "imei 1": "imei"
 };
@@ -516,7 +512,6 @@ function guessMap(headers) {
   return map;
 }
 
-// Excel numerički datum -> ISO
 function excelDateToISO(v) {
   if (v == null || v === "") return null;
   if (typeof v === "number") {
@@ -529,20 +524,17 @@ function excelDateToISO(v) {
   return isNaN(d) ? null : d.toISOString();
 }
 
-// IMEI uvijek kao string (bez znanstvene notacije, bez gubitka nula)
-function toImeiString(val) {
-  if (val == null) return "";
-  return String(val).trim().replace(/\s+/g, "");
-}
-
-// Contacted Yes/No -> ISO ili null
-function contactedToISO(val) {
-  if (val == null) return null;
-  const s = String(val).trim().toLowerCase();
+function contactedToISO(v) {
+  if (v == null) return null;
+  const s = String(v).trim().toLowerCase();
   if (["yes","true","da","1"].includes(s)) return new Date().toISOString();
   if (["no","false","ne","0",""].includes(s)) return null;
-  // ako je već datum:
-  return excelDateToISO(val);
+  return excelDateToISO(v); // ako je već datum
+}
+
+function toImeiString(v) {
+  if (v == null) return "";
+  return String(v).trim().replace(/\s+/g, "");
 }
 
 async function handleImportGalaxyCsv(e) {
@@ -553,14 +545,11 @@ async function handleImportGalaxyCsv(e) {
     const name = (f.name || "").toLowerCase();
 
     if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
-      // XLSX put
       const buf = await f.arrayBuffer();
       const wb = XLSX.read(buf, { cellDates: true });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(ws, { defval: "" }); // sve vrijednosti, bez undefined
-      rows = json;
+      rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
     } else {
-      // CSV put (prepusti autodetekciji delimiter)
       const parsed = await new Promise((resolve, reject) => {
         Papa.parse(f, { header: true, skipEmptyLines: true, complete: resolve, error: reject });
       });
@@ -572,7 +561,6 @@ async function handleImportGalaxyCsv(e) {
     const headers = Object.keys(rows[0] || {});
     const map = guessMap(headers);
 
-    // normaliziraj + konverzije
     const normRows = rows.map(r => {
       const out = {};
       for (const [src, dst] of Object.entries(map)) {
