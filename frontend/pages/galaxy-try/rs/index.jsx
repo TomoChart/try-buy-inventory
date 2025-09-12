@@ -3,6 +3,7 @@ import withAuth from "../../../components/withAuth";
 import { API, getToken, handleUnauthorized } from "../../../lib/auth";
 import CsvImportModal from "../../../components/CsvImportModal";
 import { useRouter } from "next/router";
+import HomeButton from '../../../components/HomeButton';
 
 
 function GalaxyTryRSPage() {
@@ -28,9 +29,9 @@ function GalaxyTryRSPage() {
   const [fPhone, setFPhone] = useState("");
   const [fPickupCity, setFPickupCity] = useState("");
   const [fModel, setFModel] = useState("");
-  const [fSerial, setFSerial] = useState("");
-  const [fContacted, setFContacted] = useState(""); // YYYY-MM-DD
-  const [fHandover, setFHandover] = useState("");   // YYYY-MM-DD
+    const [fSerial, setFSerial] = useState("");
+    const [fContacted, setFContacted] = useState(false);
+    const [fHandover, setFHandover] = useState("");   // YYYY-MM-DD
 
   const fileRef = useRef(null);
 
@@ -46,9 +47,9 @@ function GalaxyTryRSPage() {
     setFPhone(r["Phone"] || "");
     setFPickupCity(r["Pickup City"] || "");
     setFModel(r["Model"] || "");
-    setFSerial(r["Serial Number"] || "");
-    setFContacted(r["Contacted At"] ? toDateOnly(r["Contacted At"]) : "");
-    setFHandover(r["Handover At"] ? toDateOnly(r["Handover At"]) : "");
+      setFSerial(r["IMEI"] || "");
+      setFContacted(!!(r["Contacted"] || r.date_contacted));
+      setFHandover(r["Handover At"] ? toDateOnly(r["Handover At"]) : "");
   }
 
   function cancelEdit() {
@@ -60,7 +61,7 @@ function GalaxyTryRSPage() {
       email: fEmail || null,
       phone: fPhone || null,
       pickup_city: fPickupCity || null,
-      date_contacted: fContacted ? new Date(fContacted).toISOString() : null,
+        date_contacted: fContacted ? new Date().toISOString() : null,
       date_handover: fHandover ? new Date(fHandover).toISOString() : null,
       model: fModel || null,
       serial_number: fSerial || null,
@@ -81,6 +82,7 @@ function GalaxyTryRSPage() {
   }
 
   function normalizeRow(r = {}) {
+    const contacted = r.contacted ?? r["Contacted"] ?? !!r.date_contacted;
     return {
       submission_id: r.submission_id ?? r["Submission ID"] ?? "",
       first_name:     r.first_name     ?? r["First Name"]     ?? "",
@@ -91,12 +93,59 @@ function GalaxyTryRSPage() {
       city:           r.city           ?? r["City"]           ?? "",
       pickup_city:    r.pickup_city    ?? r["Pickup City"]    ?? "",
       created_at:     r.created_at     ?? r["Created At"]     ?? "",
-      date_contacted: r.date_contacted ?? r["Contacted At"]   ?? "",
+      date_contacted: r.date_contacted ?? "",
       date_handover:  r.date_handover  ?? r["Handover At"]    ?? "",
       model:          r.model          ?? r["Model"]          ?? "",
-      serial_number:  r.serial_number  ?? r["Serial Number"]  ?? "",
+      serial_number:  r.serial_number  ?? r["IMEI"]  ?? "",
       note:           r.note           ?? r["Note"]           ?? "",
+      contacted: Boolean(contacted),
     };
+  }
+  async function handleDelete(submissionId) {
+    try {
+      if (!submissionId) { alert('Nedostaje Submission ID.'); return; }
+      if (!confirm(`Obrisati zapis ${submissionId}?`)) return;
+
+      const res = await fetch(`${API}/admin/galaxy-try/rs/${encodeURIComponent(submissionId)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+
+      if (res.status === 204) {
+        setRows(prev => prev.filter(r => r.submission_id !== submissionId));
+        return;
+      }
+      const txt = await res.text();
+      alert(`Delete nije uspio (${res.status}).\n${txt}`);
+    } catch (err) {
+      console.error('handleDelete error', err);
+      alert('Greška pri brisanju.');
+    }
+  }
+
+  async function handleContactedChange(id, checked) {
+    try {
+      const res = await fetch(`${API}/admin/galaxy-try/rs/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify({ date_contacted: checked ? new Date().toISOString() : null }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data?.error || "Update failed");
+        return;
+      }
+      setRows(prev =>
+        prev.map(r =>
+          r.submission_id === id
+            ? { ...r, contacted: checked, date_contacted: checked ? new Date().toISOString() : null }
+            : r
+        )
+      );
+    } catch (err) {
+      console.error('handleContactedChange error', err);
+      alert('Greška pri spremanju kontakta.');
+    }
   }
 
   async function load() {
@@ -118,37 +167,43 @@ function GalaxyTryRSPage() {
 
   useEffect(() => { load(); }, []);
 
-  const filtered = rows.filter(r => {
-    for (const [k, v] of Object.entries(columnFilters)) {
-      if (!v) continue;
-      const val = k === "daysLeft" ? String(daysLeft(r.date_handover)) : String(r[k] ?? "");
-      if (!val.toLowerCase().includes(String(v).toLowerCase())) return false;
-    }
-    return true;
-  });
+    const filtered = rows.filter(r => {
+      for (const [k, v] of Object.entries(columnFilters)) {
+        if (!v) continue;
+        const val =
+          k === "daysLeft" ? String(daysLeft(r.date_handover)) :
+          k === "contacted" ? (r.contacted ? "Yes" : "No") :
+          String(r[k] ?? "");
+        if (!val.toLowerCase().includes(String(v).toLowerCase())) return false;
+      }
+      return true;
+    });
 
-  const sorted = sort.key
-    ? [...filtered].sort((a, b) => {
-        let va, vb;
-        if (sort.key === "daysLeft") {
-          va = daysLeft(a.date_handover);
-          vb = daysLeft(b.date_handover);
-        } else {
-          va = a[sort.key];
-          vb = b[sort.key];
-        }
-        const numA = Number(va);
-        const numB = Number(vb);
-        if (!isNaN(numA) && !isNaN(numB)) {
-          return sort.dir === "asc" ? numA - numB : numB - numA;
-        }
-        va = (va ?? "").toString().toLowerCase();
-        vb = (vb ?? "").toString().toLowerCase();
-        if (va < vb) return sort.dir === "asc" ? -1 : 1;
-        if (va > vb) return sort.dir === "asc" ? 1 : -1;
-        return 0;
-      })
-    : filtered;
+    const sorted = sort.key
+      ? [...filtered].sort((a, b) => {
+          let va, vb;
+          if (sort.key === "daysLeft") {
+            va = daysLeft(a.date_handover);
+            vb = daysLeft(b.date_handover);
+          } else if (sort.key === "contacted") {
+            va = a.contacted ? 1 : 0;
+            vb = b.contacted ? 1 : 0;
+          } else {
+            va = a[sort.key];
+            vb = b[sort.key];
+          }
+          const numA = Number(va);
+          const numB = Number(vb);
+          if (!isNaN(numA) && !isNaN(numB)) {
+            return sort.dir === "asc" ? numA - numB : numB - numA;
+          }
+          va = (va ?? "").toString().toLowerCase();
+          vb = (vb ?? "").toString().toLowerCase();
+          if (va < vb) return sort.dir === "asc" ? -1 : 1;
+          if (va > vb) return sort.dir === "asc" ? 1 : -1;
+          return 0;
+        })
+      : filtered;
 
   const allSelected = sorted.length > 0 && sorted.every(r => selected.includes(r.submission_id));
 
@@ -186,12 +241,12 @@ function GalaxyTryRSPage() {
     { key: "address", label: "Address" },
     { key: "city", label: "City" },
     { key: "pickup_city", label: "Pickup City" },
-    { key: "created_at", label: "Created At" },
-    { key: "date_contacted", label: "Contacted At" },
-    { key: "date_handover", label: "Handover At" },
+      { key: "created_at", label: "Created At" },
+      { key: "contacted", label: "Contacted Yes/No" },
+      { key: "date_handover", label: "Handover At" },
     { key: "daysLeft", label: "Days left" },
     { key: "model", label: "Model" },
-    { key: "serial_number", label: "Serial Number" },
+    { key: "serial_number", label: "IMEI" },
     { key: "note", label: "Note" },
   ];
 
@@ -200,6 +255,9 @@ function GalaxyTryRSPage() {
       className="p-6 min-h-screen bg-cover bg-center"
       style={{ backgroundImage: "url('/Background galaxytry.jpg')" }}
     >
+      {/* Dodano: HomeButton prije glavnog sadržaja/hnaslova */}
+      <HomeButton />
+
       <div className="flex items-center justify-between mb-4">
         <button onClick={() => router.back()} className="px-3 py-2 border rounded hover:bg-gray-50">
           ← Back
@@ -310,7 +368,13 @@ function GalaxyTryRSPage() {
                       <td>{r.city || "-"}</td>
                       <td>{r.pickup_city ?? "-"}</td>
                       <td>{fmtDateDMY(r.created_at)}</td>
-                      <td>{fmtDateDMY(r.date_contacted)}</td>
+                      <td className="text-center">
+                        <input
+                          type="checkbox"
+                          checked={r.contacted}
+                          onChange={e => handleContactedChange(r.submission_id, e.target.checked)}
+                        />
+                      </td>
                       <td>{fmtDateDMY(r.date_handover)}</td>
                       <td style={leftStyle}>{left === "" ? "" : left}</td>
                       <td>{r.model ?? "-"}</td>
@@ -412,133 +476,6 @@ function daysLeft(date_handover) {
   return 14 - diffDays; // ako je danas = handover → 14
 }
 
-function EditableRow({ row, onSave }) {
-  const [edit, setEdit] = useState(false);
-  const [form, setForm] = useState({
-    "First Name": row["First Name"],
-    "Last Name": row["Last Name"],
-    "Email": row["Email"],
-    "Phone": row["Phone"],
-    "Pickup City": row["Pickup City"],
-    "Created At": row["Created At"],
-    "Contacted At": row["Contacted At"],
-    "Handover At": row["Handover At"],
-    "Model": row["Model"],
-    "Serial Number": row["Serial Number"]
-  });
-
-  function handleChange(e) {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  }
-
-  function handleSave() {
-    setEdit(false);
-    // Mapiraj polja na backend payload (npr. date_contacted, date_handover, note, ...)
-    onSave({
-      email: form["Email"],
-      phone: form["Phone"],
-      pickup_city: form["Pickup City"],
-      date_contacted: form["Contacted At"],
-      date_handover: form["Handover At"],
-      model: form["Model"],
-      serial_number: form["Serial Number"],
-      note: row["Note"]
-    });
-  }
-
-  return (
-    <tr className="border-t hover:bg-gray-50">
-      <td className="p-2">{form["First Name"]}</td>
-      <td className="p-2">{form["Last Name"]}</td>
-      <td className="p-2">
-        {edit ? (
-          <input
-            name="Email"
-            value={form["Email"] || ""}
-            onChange={handleChange}
-            className="border px-1 py-0.5 rounded w-32"
-          />
-        ) : form["Email"]}
-      </td>
-      <td className="p-2">
-        {edit ? (
-          <input
-            name="Phone"
-            value={form["Phone"] || ""}
-            onChange={handleChange}
-            className="border px-1 py-0.5 rounded w-24"
-          />
-        ) : form["Phone"]}
-      </td>
-      <td className="p-2">
-        {edit ? (
-          <input
-            name="Pickup City"
-            value={form["Pickup City"] || ""}
-            onChange={handleChange}
-            className="border px-1 py-0.5 rounded w-24"
-          />
-        ) : form["Pickup City"]}
-      </td>
-      <td className="p-2">
-        {form["Created At"] ? new Date(form["Created At"]).toISOString().slice(0, 10) : ""}
-      </td>
-      <td className="p-2">
-        {edit ? (
-          <input
-            type="date"
-            name="Contacted At"
-            value={form["Contacted At"] ? form["Contacted At"].slice(0, 10) : ""}
-            onChange={handleChange}
-            className="border px-1 py-0.5 rounded"
-          />
-        ) : form["Contacted At"] ? form["Contacted At"].slice(0, 10) : ""}
-      </td>
-      <td className="p-2">
-        {edit ? (
-          <input
-            type="date"
-            name="Handover At"
-            value={form["Handover At"] ? form["Handover At"].slice(0, 10) : ""}
-            onChange={handleChange}
-            className="border px-1 py-0.5 rounded"
-          />
-        ) : form["Handover At"] ? form["Handover At"].slice(0, 10) : ""}
-      </td>
-      <td className="p-2">
-        {edit ? (
-          <input
-            name="Model"
-            value={form["Model"] || ""}
-            onChange={handleChange}
-            className="border px-1 py-0.5 rounded w-24"
-          />
-        ) : form["Model"]}
-      </td>
-      <td className="p-2">
-        {edit ? (
-          <input
-            name="Serial Number"
-            value={form["Serial Number"] || ""}
-            onChange={handleChange}
-            className="border px-1 py-0.5 rounded w-24"
-          />
-        ) : form["Serial Number"]}
-      </td>
-      <td className="p-2">
-        {edit ? (
-          <button className="px-2 py-1 bg-green-600 text-white rounded" onClick={handleSave}>
-            Save
-          </button>
-        ) : (
-          <button className="px-2 py-1 bg-gray-200 rounded" onClick={() => setEdit(true)}>
-            ✏️
-          </button>
-        )}
-      </td>
-    </tr>
-  );
-}
 
 // === Galaxy Try CSV import (UPsert) ===
 // zahtijeva: TOKEN iz getToken(), i `code` (HR/SI/RS) koji već koristiš na ekranu
@@ -606,7 +543,7 @@ async function handleImportGalaxyCsv(e) {
     const token = getToken();
     if (!token) { alert('Nema tokena. Prijavi se ponovno.'); return; }
 
-    const endpoint = `${API}/admin/galaxy-try/RS/import?mode=upsert`;
+  const endpoint = `${API}/admin/galaxy-try/rs/import?mode=upsert`;
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -626,20 +563,20 @@ async function handleImportGalaxyCsv(e) {
 }
 
 function EditForm({ initial, onCancel, onSaved }) {
-  const [form, setForm] = useState({
-    first_name:     initial.first_name || "",
-    last_name:      initial.last_name  || "",
-    email:          initial.email      || "",
-    phone:          initial.phone      || "",
-    address:        initial.address    || "",
-    city:           initial.city       || "",
-    pickup_city:    initial.pickup_city|| "",
-    date_contacted: initial.date_contacted || "",
-    date_handover:  initial.date_handover  || "",
-    model:          initial.model          || "",
-    serial_number:  initial.serial_number  || "",
-    note:           initial.note           || "",
-  });
+    const [form, setForm] = useState({
+      first_name:     initial.first_name || "",
+      last_name:      initial.last_name  || "",
+      email:          initial.email      || "",
+      phone:          initial.phone      || "",
+      address:        initial.address    || "",
+      city:           initial.city       || "",
+      pickup_city:    initial.pickup_city|| "",
+      contacted:      !!initial.date_contacted,
+      date_handover:  initial.date_handover  || "",
+      model:          initial.model          || "",
+      serial_number:  initial.serial_number  || "",
+      note:           initial.note           || "",
+    });
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -651,7 +588,10 @@ function EditForm({ initial, onCancel, onSaved }) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${getToken()}`
         },
-        body: JSON.stringify(form)
+        body: JSON.stringify({
+          ...form,
+          date_contacted: form.contacted ? new Date().toISOString() : null,
+        })
       });
       const data = await res.json().catch(()=> ({}));
       if (!res.ok) throw new Error(data?.error || "Save failed");
@@ -666,12 +606,21 @@ function EditForm({ initial, onCancel, onSaved }) {
   const Field = ({name,label,type="text"}) => (
     <label className="text-sm">
       <div className="mb-1">{label}</div>
-      <input
-        type={type}
-        className="border rounded px-2 py-1 w-full"
-        value={form[name] ?? ""}
-        onChange={e => setForm(s => ({...s, [name]: e.target.value}))}
-      />
+      {type === "checkbox" ? (
+        <input
+          type="checkbox"
+          className="border rounded px-2 py-1"
+          checked={form[name] ?? false}
+          onChange={e => setForm(s => ({...s, [name]: e.target.checked}))}
+        />
+      ) : (
+        <input
+          type={type}
+          className="border rounded px-2 py-1 w-full"
+          value={form[name] ?? ""}
+          onChange={e => setForm(s => ({...s, [name]: e.target.value}))}
+        />
+      )}
     </label>
   );
 
@@ -685,10 +634,10 @@ function EditForm({ initial, onCancel, onSaved }) {
         <Field name="address"    label="Address" />
         <Field name="city"       label="City" />
         <Field name="pickup_city"    label="Pickup City" />
-        <Field name="date_contacted" label="Contacted At" type="date" />
+        <Field name="contacted" label="Contacted Yes/No" type="checkbox" />
         <Field name="date_handover"  label="Handover At"  type="date" />
         <Field name="model"          label="Model" />
-        <Field name="serial_number"  label="Serial Number" />
+        <Field name="serial_number"  label="IMEI" />
         <Field name="note"           label="Note" />
       </div>
       <div className="mt-4 flex justify-end gap-2">
@@ -705,14 +654,14 @@ function EditForm({ initial, onCancel, onSaved }) {
   );
 }
 
-function AddForm({ onCancel, onSaved }) {
-  const [form, setForm] = useState({
-    first_name: "", last_name: "", email: "", phone: "",
-    address: "", city: "", pickup_city: "",
-    date_contacted: "", date_handover: "",
-    model: "", serial_number: "", note: ""
-  });
-  const [saving, setSaving] = useState(false);
+  function AddForm({ onCancel, onSaved }) {
+    const [form, setForm] = useState({
+      first_name: "", last_name: "", email: "", phone: "",
+      address: "", city: "", pickup_city: "",
+      contacted: false, date_handover: "",
+      model: "", serial_number: "", note: ""
+    });
+    const [saving, setSaving] = useState(false);
 
   async function save() {
     try {
@@ -723,7 +672,10 @@ function AddForm({ onCancel, onSaved }) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${getToken()}`
         },
-        body: JSON.stringify(form)
+        body: JSON.stringify({
+          ...form,
+          date_contacted: form.contacted ? new Date().toISOString() : null,
+        })
       });
       const data = await res.json().catch(()=> ({}));
       if (!res.ok) throw new Error(data?.error || "Create failed");
@@ -738,12 +690,21 @@ function AddForm({ onCancel, onSaved }) {
   const Field = ({name,label,type="text"}) => (
     <label className="text-sm">
       <div className="mb-1">{label}</div>
-      <input
-        type={type}
-        className="border rounded px-2 py-1 w-full"
-        value={form[name] ?? ""}
-        onChange={e => setForm(s => ({...s, [name]: e.target.value}))}
-      />
+      {type === "checkbox" ? (
+        <input
+          type="checkbox"
+          className="border rounded px-2 py-1"
+          checked={form[name] ?? false}
+          onChange={e => setForm(s => ({...s, [name]: e.target.checked}))}
+        />
+      ) : (
+        <input
+          type={type}
+          className="border rounded px-2 py-1 w-full"
+          value={form[name] ?? ""}
+          onChange={e => setForm(s => ({...s, [name]: e.target.value}))}
+        />
+      )}
     </label>
   );
 
@@ -757,10 +718,10 @@ function AddForm({ onCancel, onSaved }) {
         <Field name="address"    label="Address" />
         <Field name="city"       label="City" />
         <Field name="pickup_city"    label="Pickup City" />
-        <Field name="date_contacted" label="Contacted At" type="date" />
+        <Field name="contacted" label="Contacted Yes/No" type="checkbox" />
         <Field name="date_handover"  label="Handover At"  type="date" />
         <Field name="model"          label="Model" />
-        <Field name="serial_number"  label="Serial Number" />
+        <Field name="serial_number"  label="IMEI" />
         <Field name="note"           label="Note" />
       </div>
 
