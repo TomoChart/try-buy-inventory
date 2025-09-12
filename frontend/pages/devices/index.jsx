@@ -44,6 +44,12 @@ function DevicesPage() {
   const [editing, setEditing] = useState(null);   // detail JSON
   const [adding, setAdding] = useState(false);    // bool
 
+  // selection & filters
+  const [selected, setSelected] = useState([]);
+  const [columnFilters, setColumnFilters] = useState({});
+  const [sort, setSort] = useState({ key: "", dir: "asc" });
+  const [openMenu, setOpenMenu] = useState(null);
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -99,7 +105,29 @@ function DevicesPage() {
     });
   }
 
-  const filtered = applyFilters(rows);
+  function rowKey(r) {
+    return r.serial_number || r["Serial Number"] || r["S/N"] || r.IMEI;
+  }
+
+  const baseFiltered = applyFilters(rows);
+  const filtered = baseFiltered.filter(r => {
+    for (const [k, v] of Object.entries(columnFilters)) {
+      if (!v) continue;
+      const val = String(r[k] ?? "").toLowerCase();
+      if (!val.includes(String(v).toLowerCase())) return false;
+    }
+    return true;
+  });
+
+  const sorted = sort.key
+    ? [...filtered].sort((a, b) => {
+        const va = (a[sort.key] ?? "").toString().toLowerCase();
+        const vb = (b[sort.key] ?? "").toString().toLowerCase();
+        if (va < vb) return sort.dir === "asc" ? -1 : 1;
+        if (va > vb) return sort.dir === "asc" ? 1 : -1;
+        return 0;
+      })
+    : filtered;
 
   function ColumnToggles() {
     return (
@@ -158,6 +186,36 @@ function DevicesPage() {
 
   function BackBtn() {
     return <button onClick={() => router.back()} className="mb-3 px-3 py-1 rounded border">← Back</button>;
+  }
+
+  const allSelected = sorted.length > 0 && sorted.every(r => selected.includes(rowKey(r)));
+
+  function toggleSelect(key) {
+    setSelected(s => s.includes(key) ? s.filter(k => k !== key) : [...s, key]);
+  }
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      const visibleKeys = sorted.map(r => rowKey(r));
+      setSelected(s => s.filter(k => !visibleKeys.includes(k)));
+    } else {
+      setSelected(sorted.map(r => rowKey(r)));
+    }
+  }
+
+  async function deleteSelected() {
+    if (!selected.length) return;
+    if (!confirm(`Obrisati ${selected.length} stavki?`)) return;
+    const token = getToken();
+    for (const serial of selected) {
+      await fetch(`${API}/admin/devices/${code.toLowerCase()}/${encodeURIComponent(serial)}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    }
+    const ref = await fetch(`${API}/admin/devices/${code.toLowerCase()}/list`, { headers: { Authorization: `Bearer ${token}` }});
+    setRows(await ref.json());
+    setSelected([]);
   }
 
   // ===== Edit modal =====
@@ -406,23 +464,82 @@ function DevicesPage() {
       <ColumnToggles />
       <FilterBar />
 
+      {selected.length > 0 && (
+        <div className="mb-2">
+          <button
+            className="px-3 py-1 rounded bg-red-600 text-white"
+            onClick={deleteSelected}
+          >
+            Delete selected ({selected.length})
+          </button>
+        </div>
+      )}
+
       <div className="overflow-x-auto bg-white rounded shadow">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-100">
             <tr>
-              {headers.map(h => <th key={h.key} className="text-left p-2">{h.label}</th>)}
+              <th className="p-2"><input type="checkbox" checked={allSelected} onChange={toggleSelectAll} /></th>
+              {headers.map(h => (
+                <th key={h.key} className="relative text-left p-2">
+                  <div className="flex items-center">
+                    {h.label}
+                    {sort.key === h.key && (sort.dir === 'asc' ? ' ▲' : ' ▼')}
+                    <button
+                      className="ml-1 text-xs"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenu(openMenu === h.key ? null : h.key);
+                      }}
+                    >
+                      ▾
+                    </button>
+                  </div>
+                  {openMenu === h.key && (
+                    <div className="absolute z-10 mt-1 bg-white border rounded shadow-md p-2 w-40">
+                      <button
+                        className="block w-full text-left px-2 py-1 hover:bg-gray-100"
+                        onClick={() => {
+                          setSort({ key: h.key, dir: 'asc' });
+                          setOpenMenu(null);
+                        }}
+                      >
+                        Sort A to Z
+                      </button>
+                      <button
+                        className="block w-full text-left px-2 py-1 hover:bg-gray-100"
+                        onClick={() => {
+                          setSort({ key: h.key, dir: 'desc' });
+                          setOpenMenu(null);
+                        }}
+                      >
+                        Sort Z to A
+                      </button>
+                      <div className="mt-2">
+                        <input
+                          className="border rounded w-full px-1 py-0.5"
+                          placeholder="Text filter"
+                          value={columnFilters[h.key] || ''}
+                          onChange={e => setColumnFilters(cf => ({ ...cf, [h.key]: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </th>
+              ))}
               <th className="text-left p-2">Akcije</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map(r => {
-              const key = r.serial_number || r["Serial Number"] || r["S/N"] || r.IMEI;
+            {sorted.map(r => {
+              const key = rowKey(r);
               return (
                 <Fragment key={key}>
                   <tr
                     key={key}
                     className="border-t hover:bg-gray-50"
                   >
+                    <td className="p-2"><input type="checkbox" checked={selected.includes(key)} onChange={() => toggleSelect(key)} /></td>
                     <td className="p-2">{r.Model ?? "-"}</td>
                     <td className="p-2">{r.Purpose ?? "-"}</td>
                     <td className="p-2">{r.Ownership ?? "-"}</td>
@@ -440,7 +557,7 @@ function DevicesPage() {
                   </tr>
                   {expanded === key && (
                     <tr className="bg-gray-50">
-                      <td colSpan={headers.length + 1} className="p-3">
+                      <td colSpan={headers.length + 2} className="p-3">
                         {!detail && <div>Učitavam detalje…</div>}
                         {detail && detail.error && <div className="text-red-600">{detail.error}</div>}
                         {detail && !detail.error && (
