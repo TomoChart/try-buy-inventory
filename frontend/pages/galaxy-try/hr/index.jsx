@@ -410,11 +410,19 @@ function GalaxyTryHRPage() {
             <h3 className="font-semibold text-lg mb-3">
               Edit — {editing.submission_id}
             </h3>
-            <EditForm
-              initial={editing}
-              onCancel={() => { setShowEdit(false); setEditing(null); }}
-              onSaved={async () => { setShowEdit(false); setEditing(null); await load(); }}
-            />
+              <EditForm
+                initial={editing}
+                onCancel={() => { setShowEdit(false); setEditing(null); }}
+                onSaved={async (updated) => {
+                  setShowEdit(false);
+                  setEditing(null);
+                  if (updated) {
+                    setRows(r => r.map(x => x.submission_id === updated.submission_id ? normalizeRow(updated) : x));
+                  } else {
+                    await load();
+                  }
+                }}
+              />
           </div>
         </div>
       )}
@@ -481,37 +489,6 @@ function daysLeft(date_handover) {
 // === Galaxy Try CSV import (UPsert) ===
 // zahtijeva: TOKEN iz getToken(), i `code` (HR/SI/RS) koji već koristiš na ekranu
 
-const LEAD_FIELDS = [
-  "submission_id","created_at","first_name","last_name","email","phone",
-  "address","city","postal_code","pickup_city","consent",
-  "date_contacted","date_handover","model","serial_number","note","form_name",
-];
-
-const ALIASES = {
-  // devices
-  "s/n": "serial_number", "sn": "serial_number", "serial": "serial_number",
-  "imei1": "imei", "imei_1": "imei", "imei 1": "imei",
-  "control": "control_no", "control no": "control_no", "control_number": "control_no",
-  "colour": "color",
-  // leads
-  "e-mail": "email", "e pošta": "email", "e_posta": "email", "e posta": "email",
-  "zip": "postal_code",
-};
-
-function guessMap(headers) {
-  const map = {};
-  headers.forEach(h => {
-    const raw = String(h || "").trim();
-    const key = raw.toLowerCase();
-    const alias = ALIASES[key];
-    if (alias && LEAD_FIELDS.includes(alias)) { map[raw] = alias; return; }
-    if (LEAD_FIELDS.includes(key)) { map[raw] = key; return; }
-    if (key === "s/n" || key === "s\\n") map[raw] = "serial_number";
-    else if (key === "imei1") map[raw] = "imei";
-  });
-  return map;
-}
-
 async function handleImportGalaxyCsv(e) {
   const file = e.target.files?.[0];
   if (!file) return;
@@ -527,18 +504,43 @@ async function handleImportGalaxyCsv(e) {
     });
 
     const data = Array.isArray(parsed.data) ? parsed.data : [];
-    const headers = parsed.meta?.fields || Object.keys(data[0] || {});
-    const map = guessMap(headers);
-    const normRows = data
-      .map(r => {
-        const o = {};
-        for (const [src, dst] of Object.entries(map)) {
-          if (!dst) continue;
-          o[dst] = r[src] ?? "";
+
+    const normRows = data.map(r => {
+      const g = (k) => {
+        const keys = Object.keys(r);
+        const hit = keys.find(x => String(x).trim().toLowerCase() === k);
+        return hit ? r[hit] : "";
+      };
+      const getAny = (...alts) => {
+        for (const a of alts) {
+          const v = g(a.toLowerCase());
+          if (v !== undefined && v !== "") return v;
         }
-        return o;
-      })
-      .filter(r => r.submission_id);
+        return "";
+      };
+
+      return {
+        submission_id: getAny('submission_id'),
+
+        created_at:     getAny('created_at', 'created at'),
+        first_name:     getAny('first_name'),
+        last_name:      getAny('last_name'),
+        email:          getAny('email','e_mail','e_pošta','e-mail'),
+        phone:          getAny('phone','telefon','mobitel'),
+        address:        getAny('address','adresa'),
+        city:           getAny('city','grad'),
+        postal_code:    getAny('postal_code','zip','poštanski_broj'),
+        pickup_city:    getAny('pickup_city'),
+        consent:        getAny('consent','privola'),
+        date_contacted: getAny('date_contacted'),
+        date_handover:  getAny('date_handover', 'handover at'),
+
+        model:          getAny('model'),
+        serial_number:  getAny('serial_number','s/n','s_n','imei','imei1','imei_1','imei 1'),
+        note:           getAny('note','napomena'),
+        form_name:      getAny('form_name'),
+      };
+    }).filter(r => r.submission_id);
 
     if (!normRows.length) { alert('Nema valjanih redova (submission_id nedostaje).'); return; }
 
@@ -595,9 +597,9 @@ function EditForm({ initial, onCancel, onSaved }) {
           date_contacted: form.contacted ? new Date().toISOString() : null,
         })
       });
-      const data = await res.json().catch(()=> ({}));
-      if (!res.ok) throw new Error(data?.error || "Save failed");
-      await onSaved();
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error || "Save failed");
+        await onSaved(data.item || null);
     } catch (e) {
       alert(e.message);
     } finally {
