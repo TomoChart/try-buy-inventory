@@ -12,20 +12,26 @@ const DEVICE_FIELDS = [
 
 const LEAD_FIELDS = [
   "submission_id","created_at","first_name","last_name","email","phone",
-  "address","city","postal_code","pickup_city","consent",
-  "date_contacted","date_handover","model","serial_number","note","form_name"
+  "address","city","postal_code","pickup_city","contacted",
+  "handover_at","days_left","model","imei","note","form_name"
 ];
 
 // heuristika za automatsko mapiranje
 const ALIASES = {
   // devices
   "s/n": "serial_number", "sn": "serial_number", "serial": "serial_number",
-  "imei1": "imei", "imei_1": "imei", "imei 1": "imei",
+  "imei": "imei", "imei1": "imei", "imei_1": "imei", "imei 1": "imei",
   "control": "control_no", "control no": "control_no", "control_number": "control_no",
   "colour": "color",
   // leads
   "e-mail": "email", "e pošta": "email", "e_posta": "email", "e posta": "email",
   "zip": "postal_code",
+  "created at": "created_at",
+  "handover at": "handover_at",
+  "date handover": "handover_at", "date_handover": "handover_at",
+  "date contacted": "contacted", "date_contacted": "contacted",
+  "contacted at": "contacted",
+  "days left": "days_left", "daysleft": "days_left",
 };
 
 function guessMap(headers, kind) {

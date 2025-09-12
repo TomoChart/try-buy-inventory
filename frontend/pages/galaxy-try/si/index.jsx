@@ -48,7 +48,7 @@ function GalaxyTrySIPage() {
     setFPickupCity(r["Pickup City"] || "");
     setFModel(r["Model"] || "");
       setFSerial(r["IMEI"] || "");
-      setFContacted(!!(r["Contacted"] || r.date_contacted));
+      setFContacted(!!(r["Contacted"] || r.contacted));
       setFHandover(r["Handover At"] ? toDateOnly(r["Handover At"]) : "");
   }
 
@@ -61,10 +61,10 @@ function GalaxyTrySIPage() {
       email: fEmail || null,
       phone: fPhone || null,
       pickup_city: fPickupCity || null,
-        date_contacted: fContacted ? new Date().toISOString() : null,
-      date_handover: fHandover ? new Date(fHandover).toISOString() : null,
+        contacted: fContacted ? new Date().toISOString() : null,
+      handover_at: fHandover ? new Date(fHandover).toISOString() : null,
       model: fModel || null,
-      serial_number: fSerial || null,
+      imei: fSerial || null,
     };
     const r = await fetch(`${API}/admin/galaxy-try/si/${id}`, {
       method: "PATCH",
@@ -82,7 +82,7 @@ function GalaxyTrySIPage() {
   }
 
   function normalizeRow(r = {}) {
-    const contacted = r.contacted ?? r["Contacted"] ?? !!r.date_contacted;
+    const contacted = r.contacted ?? r["Contacted"] ?? !!r.contacted;
     return {
       submission_id: r.submission_id ?? r["Submission ID"] ?? "",
       first_name:     r.first_name     ?? r["First Name"]     ?? "",
@@ -93,10 +93,10 @@ function GalaxyTrySIPage() {
       city:           r.city           ?? r["City"]           ?? "",
       pickup_city:    r.pickup_city    ?? r["Pickup City"]    ?? "",
       created_at:     r.created_at     ?? r["Created At"]     ?? "",
-      date_contacted: r.date_contacted ?? "",
-      date_handover:  r.date_handover  ?? r["Handover At"]    ?? "",
+      contacted: r.contacted ?? "",
+      handover_at:  r.handover_at  ?? r["Handover At"]    ?? "",
       model:          r.model          ?? r["Model"]          ?? "",
-      serial_number:  r.serial_number  ?? r["IMEI"]  ?? "",
+      imei:  r.imei  ?? r["IMEI"]  ?? "",
       note:           r.note           ?? r["Note"]           ?? "",
       contacted: Boolean(contacted),
     };
@@ -128,7 +128,7 @@ function GalaxyTrySIPage() {
       const res = await fetch(`${API}/admin/galaxy-try/si/${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
-        body: JSON.stringify({ date_contacted: checked ? new Date().toISOString() : null }),
+        body: JSON.stringify({ contacted: checked ? new Date().toISOString() : null }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -138,7 +138,7 @@ function GalaxyTrySIPage() {
       setRows(prev =>
         prev.map(r =>
           r.submission_id === id
-            ? { ...r, contacted: checked, date_contacted: checked ? new Date().toISOString() : null }
+            ? { ...r, contacted: checked, contacted: checked ? new Date().toISOString() : null }
             : r
         )
       );
@@ -171,7 +171,7 @@ function GalaxyTrySIPage() {
       for (const [k, v] of Object.entries(columnFilters)) {
         if (!v) continue;
         const val =
-          k === "daysLeft" ? String(daysLeft(r.date_handover)) :
+          k === "daysLeft" ? String(daysLeft(r.handover_at)) :
           k === "contacted" ? (r.contacted ? "Yes" : "No") :
           String(r[k] ?? "");
         if (!val.toLowerCase().includes(String(v).toLowerCase())) return false;
@@ -183,8 +183,8 @@ function GalaxyTrySIPage() {
       ? [...filtered].sort((a, b) => {
           let va, vb;
           if (sort.key === "daysLeft") {
-            va = daysLeft(a.date_handover);
-            vb = daysLeft(b.date_handover);
+            va = daysLeft(a.handover_at);
+            vb = daysLeft(b.handover_at);
           } else if (sort.key === "contacted") {
             va = a.contacted ? 1 : 0;
             vb = b.contacted ? 1 : 0;
@@ -243,10 +243,10 @@ function GalaxyTrySIPage() {
     { key: "pickup_city", label: "Pickup City" },
       { key: "created_at", label: "Created At" },
       { key: "contacted", label: "Contacted Yes/No" },
-      { key: "date_handover", label: "Handover At" },
+      { key: "handover_at", label: "Handover At" },
     { key: "daysLeft", label: "Days left" },
     { key: "model", label: "Model" },
-    { key: "serial_number", label: "IMEI" },
+    { key: "imei", label: "IMEI" },
     { key: "note", label: "Note" },
   ];
 
@@ -355,7 +355,7 @@ function GalaxyTrySIPage() {
               </thead>
               <tbody>
                 {sorted.map(r => {
-                  const left = daysLeft(r.date_handover);
+                  const left = daysLeft(r.handover_at);
                   const leftStyle = (left === 0) ? { backgroundColor: "#fee2e2", color: "#991b1b", fontWeight: 600 } : {};
                   return (
                     <tr key={r.submission_id}>
@@ -375,10 +375,10 @@ function GalaxyTrySIPage() {
                           onChange={e => handleContactedChange(r.submission_id, e.target.checked)}
                         />
                       </td>
-                      <td>{fmtDateDMY(r.date_handover)}</td>
+                      <td>{fmtDateDMY(r.handover_at)}</td>
                       <td style={leftStyle}>{left === "" ? "" : left}</td>
                       <td>{r.model ?? "-"}</td>
-                      <td>{r.serial_number ?? "-"}</td>
+                      <td>{r.imei ?? "-"}</td>
                       <td>{r.note ?? "-"}</td>
                       <td className="p-2 whitespace-nowrap">
                         <button
@@ -463,10 +463,10 @@ function fmtDateDMY(value) {
   return `${dd}-${mm}-${yyyy}`;
 }
 
-// 14-dnevni countdown od date_handover
-function daysLeft(date_handover) {
-  if (!date_handover) return "";
-  const start = new Date(date_handover);
+// 14-dnevni countdown od handover_at
+function daysLeft(handover_at) {
+  if (!handover_at) return "";
+  const start = new Date(handover_at);
   if (isNaN(start)) return "";
   const today = new Date();
   // normaliziraj na 00:00
@@ -526,12 +526,12 @@ async function handleImportGalaxyCsv(e) {
         city:           getAny('city','grad'),
         postal_code:    getAny('postal_code','zip','poštanski_broj'),
         pickup_city:    getAny('pickup_city'),
-        consent:        getAny('consent','privola'),
-        date_contacted: getAny('date_contacted'),
-        date_handover:  getAny('date_handover'),
+        contacted: getAny('contacted'),
+        handover_at:  getAny('handover_at'),
+        days_left:     getAny('days_left'),
 
         model:          getAny('model'),
-        serial_number:  getAny('serial_number','s/n','s_n'),
+        imei:  getAny('imei','s/n','s_n'),
         note:           getAny('note','napomena'),
         form_name:      getAny('form_name'),
       };
@@ -571,10 +571,10 @@ function EditForm({ initial, onCancel, onSaved }) {
       address:        initial.address    || "",
       city:           initial.city       || "",
       pickup_city:    initial.pickup_city|| "",
-      contacted:      !!initial.date_contacted,
-      date_handover:  initial.date_handover  || "",
+      contacted:      !!initial.contacted,
+      handover_at:  initial.handover_at  || "",
       model:          initial.model          || "",
-      serial_number:  initial.serial_number  || "",
+      imei:  initial.imei  || "",
       note:           initial.note           || "",
     });
   const [saving, setSaving] = useState(false);
@@ -590,7 +590,7 @@ function EditForm({ initial, onCancel, onSaved }) {
         },
         body: JSON.stringify({
           ...form,
-          date_contacted: form.contacted ? new Date().toISOString() : null,
+          contacted: form.contacted ? new Date().toISOString() : null,
         })
       });
       const data = await res.json().catch(()=> ({}));
@@ -635,9 +635,9 @@ function EditForm({ initial, onCancel, onSaved }) {
         <Field name="city"       label="City" />
         <Field name="pickup_city"    label="Pickup City" />
         <Field name="contacted" label="Contacted Yes/No" type="checkbox" />
-        <Field name="date_handover"  label="Handover At"  type="date" />
+        <Field name="handover_at"  label="Handover At"  type="date" />
         <Field name="model"          label="Model" />
-        <Field name="serial_number"  label="IMEI" />
+        <Field name="imei"  label="IMEI" />
         <Field name="note"           label="Note" />
       </div>
       <div className="mt-4 flex justify-end gap-2">
@@ -658,8 +658,8 @@ function EditForm({ initial, onCancel, onSaved }) {
     const [form, setForm] = useState({
       first_name: "", last_name: "", email: "", phone: "",
       address: "", city: "", pickup_city: "",
-      contacted: false, date_handover: "",
-      model: "", serial_number: "", note: ""
+      contacted: false, handover_at: "",
+      model: "", imei: "", note: ""
     });
     const [saving, setSaving] = useState(false);
 
@@ -674,7 +674,7 @@ function EditForm({ initial, onCancel, onSaved }) {
         },
         body: JSON.stringify({
           ...form,
-          date_contacted: form.contacted ? new Date().toISOString() : null,
+          contacted: form.contacted ? new Date().toISOString() : null,
         })
       });
       const data = await res.json().catch(()=> ({}));
@@ -719,9 +719,9 @@ function EditForm({ initial, onCancel, onSaved }) {
         <Field name="city"       label="City" />
         <Field name="pickup_city"    label="Pickup City" />
         <Field name="contacted" label="Contacted Yes/No" type="checkbox" />
-        <Field name="date_handover"  label="Handover At"  type="date" />
+        <Field name="handover_at"  label="Handover At"  type="date" />
         <Field name="model"          label="Model" />
-        <Field name="serial_number"  label="IMEI" />
+        <Field name="imei"  label="IMEI" />
         <Field name="note"           label="Note" />
       </div>
 

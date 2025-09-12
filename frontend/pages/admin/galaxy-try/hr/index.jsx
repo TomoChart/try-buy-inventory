@@ -87,7 +87,7 @@ function GalaxyTryHRPage() {
               const post = getVal(r, ["Pošta", "postal_code", "post_code"]);
               const pickupCity = getVal(r, ["Grad preuzimanja", "pickup_city"]);
               const dateCreated = fmtDate(getVal(r, ["Datum prijave", "created_at"]));
-              const dateHandover = fmtDate(getVal(r, ["Datum predaje", "date_handover"]));
+              const dateHandover = fmtDate(getVal(r, ["Datum predaje", "handover_at"]));
 
               return (
                 <Fragment key={id}>
