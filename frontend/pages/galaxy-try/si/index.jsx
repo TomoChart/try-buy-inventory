@@ -234,6 +234,7 @@ function GalaxyTrySIPage() {
   }
 
   const columns = [
+    { key: "created_at", label: "Created At" },
     { key: "first_name", label: "First Name" },
     { key: "last_name", label: "Last Name" },
     { key: "email", label: "Email" },
@@ -241,9 +242,8 @@ function GalaxyTrySIPage() {
     { key: "address", label: "Address" },
     { key: "city", label: "City" },
     { key: "pickup_city", label: "Pickup City" },
-      { key: "created_at", label: "Created At" },
-      { key: "contacted", label: "Contacted Yes/No" },
-      { key: "handover_at", label: "Handover At" },
+    { key: "contacted", label: "Contacted Yes/No" },
+    { key: "handover_at", label: "Handover At" },
     { key: "daysLeft", label: "Days left" },
     { key: "model", label: "Model" },
     { key: "imei", label: "IMEI" },
