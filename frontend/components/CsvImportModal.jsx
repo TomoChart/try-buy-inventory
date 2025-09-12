@@ -1,5 +1,5 @@
 // frontend/components/CsvImportModal.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import Papa from "papaparse";
 import { API, getToken } from "../lib/auth";
 import * as XLSX from "xlsx";
@@ -16,6 +16,12 @@ const LEAD_FIELDS = [
   "submission_id","created_at","first_name","last_name","email","phone",
   "address","city","postal_code","pickup_city","contacted",
   "handover_at","days_left","model","imei","note","form_name"
+];
+
+// polja s datumima koja treba konvertirati
+const DATE_FIELDS = [
+  "date_assigned", "expected_return", "date_last_change",
+  "created_at", "handover_at",
 ];
 
 // heuristika za automatsko mapiranje
@@ -84,56 +90,6 @@ function toImeiString(v) {
   return String(v).trim().replace(/\s+/g, "");
 }
 
-// === NOVI HANDLER ===
-function handleFile(f) {
-  setFile(f);
-
-  const name = (f.name || "").toLowerCase();
-  const loadCsv = () => new Promise((resolve, reject) => {
-    Papa.parse(f, { header: true, skipEmptyLines: true, complete: resolve, error: reject });
-  });
-
-  (async () => {
-    let data = [];
-    if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
-      const buf = await f.arrayBuffer();
-      const wb = XLSX.read(buf, { cellDates: true });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      data = XLSX.utils.sheet_to_json(ws, { defval: "" }); // sve vrijednosti, bez undefined
-      const hdrs = data.length ? Object.keys(data[0]) : [];
-      setRows(data);
-      setHeaders(hdrs);
-      setMap(guessMap(hdrs, kind));
-    } else {
-      const res = await loadCsv();
-      const rows = Array.isArray(res.data) ? res.data : [];
-      const hdrs = res.meta?.fields || Object.keys(rows[0] || {});
-      setRows(rows);
-      setHeaders(hdrs);
-      setMap(guessMap(hdrs, kind));
-    }
-  })();
-}
-
-function buildPayload() {
-  return rows.map(r => {
-    const o = {};
-    for (const [src, dst] of Object.entries(map)) {
-      if (!dst) continue;
-      let v = r[src];
-
-      if (kind === "leads") {
-        if (dst === "imei") v = toImeiString(v);
-        else if (dst === "created_at" || dst === "handover_at") v = excelDateToISO(v);
-        else if (dst === "contacted") v = contactedToISO(v);
-        else if (dst === "days_left") v = (v === "" ? null : Number(v));
-      }
-      o[dst] = v ?? null;
-    }
-    return o;
-  });
-}
-
 export default function CsvImportModal({ onClose, countryCode = "HR", kind = "devices" }) {
   const [file, setFile] = useState(null);
   const [rows, setRows] = useState([]);
@@ -143,34 +99,47 @@ export default function CsvImportModal({ onClose, countryCode = "HR", kind = "de
   const [posting, setPosting] = useState(false);
   const [result, setResult] = useState(null);
 
-  function handleFile(f) {
+  async function handleFile(f) {
     setFile(f);
-    Papa.parse(f, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (res) => {
-        const data = Array.isArray(res.data) ? res.data : [];
-        setRows(data);
-        const hdrs = res.meta?.fields || Object.keys(data[0] || {});
-        setHeaders(hdrs);
-        setMap(guessMap(hdrs, kind));
-      }
-    });
+    const name = (f.name || "").toLowerCase();
+    let data = [];
+    let hdrs = [];
+
+    if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+      const buf = await f.arrayBuffer();
+      const wb = XLSX.read(buf, { cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      data = XLSX.utils.sheet_to_json(ws, { defval: "" });
+      hdrs = data.length ? Object.keys(data[0]) : [];
+    } else {
+      const res = await new Promise((resolve, reject) => {
+        Papa.parse(f, { header: true, skipEmptyLines: true, complete: resolve, error: reject });
+      });
+      data = Array.isArray(res.data) ? res.data : [];
+      hdrs = res.meta?.fields || Object.keys(data[0] || {});
+    }
+
+    setRows(data);
+    setHeaders(hdrs);
+    setMap(guessMap(hdrs, kind));
   }
 
   const targetFields = kind === "devices" ? DEVICE_FIELDS : LEAD_FIELDS;
 
   function buildPayload() {
-    // premapiraj
-    const out = rows.map(r => {
+    return rows.map(r => {
       const o = {};
       for (const [src, dst] of Object.entries(map)) {
         if (!dst) continue;
-        o[dst] = r[src] ?? null;
+        let v = r[src];
+        if (DATE_FIELDS.includes(dst)) v = excelDateToISO(v);
+        if (dst === "contacted") v = contactedToISO(v);
+        if (dst === "imei") v = toImeiString(v);
+        if (dst === "days_left") v = (v === "" ? null : Number(v));
+        o[dst] = v ?? null;
       }
       return o;
     });
-    return out;
   }
 
   async function submit() {
