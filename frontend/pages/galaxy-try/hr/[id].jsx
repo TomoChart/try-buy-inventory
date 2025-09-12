@@ -54,7 +54,7 @@ function DetailPage() {
         setPhone(data["Telefon"] ?? "");
         setPickupCity(data["Grad preuzimanja"] ?? data["Pickup City"] ?? "");
         setModel(data["Model"] ?? "");
-        setSerial(data["Serial Number"] ?? "");
+        setSerial(data["IMEI"] ?? "");
         setNote(data["Bilješka"] ?? "");
 
         setContactedAt(toDateOrNull(data["Kontaktiran"]));
@@ -72,10 +72,10 @@ function DetailPage() {
         email: email || null,
         phone: phone || null,
         pickup_city: pickupCity || null,
-        date_contacted: toIsoOrNull(contactedAt),
-        date_handover: toIsoOrNull(handoverAt),
+        contacted: toIsoOrNull(contactedAt),
+        handover_at: toIsoOrNull(handoverAt),
         model: model || null,
-        serial_number: serial || null,
+        imei: serial || null,
         note: note || null,
       };
       const r = await fetch(`${API}/admin/galaxy-try/hr/${id}`, {
@@ -138,7 +138,7 @@ function DetailPage() {
               <input className="w-full border rounded px-2 py-1" value={model} onChange={(e)=>setModel(e.target.value)} />
             </LabeledInput>
 
-            <LabeledInput label="Serial Number">
+            <LabeledInput label="IMEI">
               <input className="w-full border rounded px-2 py-1" value={serial} onChange={(e)=>setSerial(e.target.value)} />
             </LabeledInput>
 

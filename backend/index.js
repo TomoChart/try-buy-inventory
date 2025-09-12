@@ -300,7 +300,7 @@ app.get('/admin/galaxy-try/hr/list',
 
 // -------- PATCH: GALAXY TRY (edit po submission_id) ------------------------
 // PATCH /admin/galaxy-try/:code/:id
-// Body: { email?, phone?, pickup_city?, date_contacted?, date_handover?, model?, serial_number?, note? }
+// Body: { email?, phone?, pickup_city?, contacted?, handover_at?, model?, imei?, note? }
 app.patch(
   "/admin/galaxy-try/:code/:id",
   requireAuth,
@@ -317,10 +317,11 @@ app.patch(
         "email",
         "phone",
         "pickup_city",
-        "date_contacted",
-        "date_handover",
+        "contacted",
+        "handover_at",
+        "days_left",
         "model",
-        "serial_number",
+        "imei",
         "note",
       ];
 
@@ -335,8 +336,8 @@ app.patch(
       // jednostavne validacije (po potrebi proširi)
       const isoOrNull = (v) =>
         v == null || v === "" ? null : new Date(v).toString() !== "Invalid Date" ? v : null;
-      if ("date_contacted" in payload) payload.date_contacted = isoOrNull(payload.date_contacted);
-      if ("date_handover" in payload) payload.date_handover = isoOrNull(payload.date_handover);
+      if ("contacted" in payload) payload.contacted = isoOrNull(payload.contacted);
+      if ("handover_at" in payload) payload.handover_at = isoOrNull(payload.handover_at);
 
       // update preko submission_id i country_code
       const sql = `
@@ -347,14 +348,15 @@ app.patch(
           address = COALESCE($3, address),
           city = COALESCE($4, city),
           pickup_city = COALESCE($5, pickup_city),
-          date_contacted = COALESCE($6, date_contacted),
-          date_handover = COALESCE($7, date_handover),
-          model = COALESCE($8, model),
-          serial_number = COALESCE($9, serial_number),
-          note = COALESCE($10, note)
-        WHERE submission_id = $11 AND country_code = $12
+          contacted = COALESCE($6, contacted),
+          handover_at = COALESCE($7, handover_at),
+          days_left = COALESCE($8, days_left),
+          model = COALESCE($9, model),
+          imei = COALESCE($10, imei),
+          note = COALESCE($11, note)
+        WHERE submission_id = $12 AND country_code = $13
         RETURNING
-          submission_id, email, phone, address, city, pickup_city, date_contacted, date_handover, model, serial_number, note
+          submission_id, email, phone, address, city, pickup_city, contacted, handover_at, days_left, model, imei, note
       `;
 
       const vals = [
@@ -363,10 +365,11 @@ app.patch(
         payload.address ?? null,
         payload.city ?? null,
         payload.pickup_city ?? null,
-        payload.date_contacted ?? null,
-        payload.date_handover ?? null,
+        payload.contacted ?? null,
+        payload.handover_at ?? null,
+        payload.days_left ?? null,
         payload.model ?? null,
-        payload.serial_number ?? null,
+        payload.imei ?? null,
         payload.note ?? null,
         id,
         code,
@@ -397,8 +400,8 @@ app.patch('/admin/galaxy-try/:code/:submission_id',
       const ALLOWED = new Set([
         'first_name','last_name','email','phone',
         'address','city','pickup_city',
-        'date_contacted','date_handover',
-        'model','serial_number','note'
+        'contacted','handover_at','days_left',
+        'model','imei','note'
       ]);
 
       // zadrži samo dozvoljena polja koja su poslana
@@ -434,10 +437,11 @@ app.patch('/admin/galaxy-try/:code/:submission_id',
           address          AS "Address",
           city             AS "City",
           pickup_city      AS "Pickup City",
-          date_contacted   AS "Contacted At",
-          date_handover    AS "Handover At",
+          contacted   AS "Contacted At",
+          handover_at    AS "Handover At",
+          days_left       AS "Days Left",
           model            AS "Model",
-          serial_number    AS "Serial Number",
+          imei    AS "IMEI",
           note             AS "Note"
       `;
       const rows = await prisma.$queryRawUnsafe(sql, ...params);
@@ -463,8 +467,8 @@ app.post('/admin/galaxy-try/:code',
       const ALLOWED = new Set([
         'first_name','last_name','email','phone',
         'address','city','pickup_city',
-        'date_contacted','date_handover',
-        'model','serial_number','note'
+        'contacted','handover_at','days_left',
+        'model','imei','note'
       ]);
 
       const b = req.body || {};
@@ -477,8 +481,8 @@ app.post('/admin/galaxy-try/:code',
       const submission_id = String(b.submission_id || crypto.randomUUID());
 
       // normalizacija datuma (ako su došli kao "YYYY-MM-DD")
-      if (payload.date_contacted) payload.date_contacted = new Date(payload.date_contacted);
-      if (payload.date_handover)  payload.date_handover  = new Date(payload.date_handover);
+      if (payload.contacted) payload.contacted = new Date(payload.contacted);
+      if (payload.handover_at)  payload.handover_at  = new Date(payload.handover_at);
 
       const cols = ['submission_id','country_code', ...Object.keys(payload)];
       const vals = [submission_id, code, ...Object.values(payload)];
@@ -500,10 +504,11 @@ app.post('/admin/galaxy-try/:code',
           city                 AS city,
           pickup_city          AS pickup_city,
           created_at           AS created_at,
-          date_contacted       AS date_contacted,
-          date_handover        AS date_handover,
+          contacted       AS contacted,
+          handover_at        AS handover_at,
+          days_left            AS days_left,
           model                AS model,
-          serial_number        AS serial_number,
+          imei        AS imei,
           note                 AS note
       `;
       const rows = await prisma.$queryRawUnsafe(sql, ...vals);
@@ -577,10 +582,10 @@ app.get('/admin/galaxy-try/:code/list',
           address          AS "Address",
           city             AS "City",
           pickup_city      AS "Pickup City",
-          date_contacted   AS "Contacted At",
-          date_handover    AS "Handover At",
+          contacted   AS "Contacted At",
+          handover_at    AS "Handover At",
           model            AS "Model",
-          serial_number    AS "Serial Number",
+          imei    AS "IMEI",
           note             AS "Note"
         FROM leads_import
         WHERE country_code = $1
@@ -606,23 +611,23 @@ app.post('/admin/galaxy-try/hr/import', requireAuth, requireRole('country_admin'
     for (const r of rows) {
       if (!r.submission_id) continue;
       // Upsert logika: pokušaj update, ako ne postoji onda insert
-      const qUpdate = `UPDATE leads_import SET 
+      const qUpdate = `UPDATE leads_import SET
         first_name = $2, last_name = $3, email = $4, phone = $5, address = $6, city = $7, pickup_city = $8,
-        date_contacted = $9, date_handover = $10, model = $11, serial_number = $12, note = $13
+        contacted = $9, handover_at = $10, days_left = $11, model = $12, imei = $13, note = $14
         WHERE submission_id = $1 AND country_code = 'HR'`;
       const vals = [
         r.submission_id, r.first_name, r.last_name, r.email, r.phone, r.address, r.city, r.pickup_city,
-        r.date_contacted, r.date_handover, r.model, r.serial_number, r.note
+        r.contacted, r.handover_at, r.days_left, r.model, r.imei, r.note
       ];
       const result = await prisma.$executeRawUnsafe(qUpdate, ...vals);
       if (result === 0) {
         // Insert ako ne postoji
         const qInsert = `INSERT INTO leads_import (
           submission_id, country_code, first_name, last_name, email, phone, address, city, pickup_city,
-          date_contacted, date_handover, model, serial_number, note
-        ) VALUES ($1,'HR',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`;
+          contacted, handover_at, days_left, model, imei, note
+        ) VALUES ($1,'HR',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`;
         await prisma.$executeRawUnsafe(qInsert, r.submission_id, r.first_name, r.last_name, r.email, r.phone, r.address, r.city, r.pickup_city,
-          r.date_contacted, r.date_handover, r.model, r.serial_number, r.note);
+          r.contacted, r.handover_at, r.days_left, r.model, r.imei, r.note);
       }
       upserted++;
     }
@@ -644,23 +649,23 @@ app.post('/admin/galaxy-try/hr/import', requireAuth, requireRole('country_admin'
     for (const r of rows) {
       if (!r.submission_id) continue;
       // Upsert logika: pokušaj update, ako ne postoji onda insert
-      const qUpdate = `UPDATE leads_import SET 
+      const qUpdate = `UPDATE leads_import SET
         first_name = $2, last_name = $3, email = $4, phone = $5, address = $6, city = $7, pickup_city = $8,
-        date_contacted = $9, date_handover = $10, model = $11, serial_number = $12, note = $13
+        contacted = $9, handover_at = $10, days_left = $11, model = $12, imei = $13, note = $14
         WHERE submission_id = $1 AND country_code = 'HR'`;
       const vals = [
         r.submission_id, r.first_name, r.last_name, r.email, r.phone, r.address, r.city, r.pickup_city,
-        r.date_contacted, r.date_handover, r.model, r.serial_number, r.note
+        r.contacted, r.handover_at, r.days_left, r.model, r.imei, r.note
       ];
       const result = await prisma.$executeRawUnsafe(qUpdate, ...vals);
       if (result === 0) {
         // Insert ako ne postoji
         const qInsert = `INSERT INTO leads_import (
           submission_id, country_code, first_name, last_name, email, phone, address, city, pickup_city,
-          date_contacted, date_handover, model, serial_number, note
-        ) VALUES ($1,'HR',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`;
+          contacted, handover_at, days_left, model, imei, note
+        ) VALUES ($1,'HR',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`;
         await prisma.$executeRawUnsafe(qInsert, r.submission_id, r.first_name, r.last_name, r.email, r.phone, r.address, r.city, r.pickup_city,
-          r.date_contacted, r.date_handover, r.model, r.serial_number, r.note);
+          r.contacted, r.handover_at, r.days_left, r.model, r.imei, r.note);
       }
       upserted++;
     }
