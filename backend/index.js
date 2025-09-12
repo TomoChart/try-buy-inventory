@@ -613,21 +613,21 @@ app.post('/admin/galaxy-try/hr/import', requireAuth, requireRole('country_admin'
       // Upsert logika: pokušaj update, ako ne postoji onda insert
       const qUpdate = `UPDATE leads_import SET
         first_name = $2, last_name = $3, email = $4, phone = $5, address = $6, city = $7, pickup_city = $8,
-        contacted = $9, handover_at = $10, days_left = $11, model = $12, imei = $13, note = $14
+        created_at = $9, contacted = $10, handover_at = $11, days_left = $12, model = $13, imei = $14, note = $15
         WHERE submission_id = $1 AND country_code = 'HR'`;
       const vals = [
         r.submission_id, r.first_name, r.last_name, r.email, r.phone, r.address, r.city, r.pickup_city,
-        r.contacted, r.handover_at, r.days_left, r.model, r.imei, r.note
+        r.created_at, r.contacted, r.handover_at, r.days_left, r.model, r.imei, r.note
       ];
       const result = await prisma.$executeRawUnsafe(qUpdate, ...vals);
       if (result === 0) {
         // Insert ako ne postoji
         const qInsert = `INSERT INTO leads_import (
           submission_id, country_code, first_name, last_name, email, phone, address, city, pickup_city,
-          contacted, handover_at, days_left, model, imei, note
-        ) VALUES ($1,'HR',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`;
+          created_at, contacted, handover_at, days_left, model, imei, note
+        ) VALUES ($1,'HR',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`;
         await prisma.$executeRawUnsafe(qInsert, r.submission_id, r.first_name, r.last_name, r.email, r.phone, r.address, r.city, r.pickup_city,
-          r.contacted, r.handover_at, r.days_left, r.model, r.imei, r.note);
+          r.created_at, r.contacted, r.handover_at, r.days_left, r.model, r.imei, r.note);
       }
       upserted++;
     }
@@ -638,43 +638,6 @@ app.post('/admin/galaxy-try/hr/import', requireAuth, requireRole('country_admin'
   }
 });
 
-// === GALAXY TRY HR: CSV import (upsert) ===
-app.post('/admin/galaxy-try/hr/import', requireAuth, requireRole('country_admin','superadmin'), async (req, res) => {
-  try {
-    const { rows } = req.body;
-    if (!Array.isArray(rows) || !rows.length) {
-      return res.status(400).json({ error: 'No rows provided' });
-    }
-    let upserted = 0;
-    for (const r of rows) {
-      if (!r.submission_id) continue;
-      // Upsert logika: pokušaj update, ako ne postoji onda insert
-      const qUpdate = `UPDATE leads_import SET
-        first_name = $2, last_name = $3, email = $4, phone = $5, address = $6, city = $7, pickup_city = $8,
-        contacted = $9, handover_at = $10, days_left = $11, model = $12, imei = $13, note = $14
-        WHERE submission_id = $1 AND country_code = 'HR'`;
-      const vals = [
-        r.submission_id, r.first_name, r.last_name, r.email, r.phone, r.address, r.city, r.pickup_city,
-        r.contacted, r.handover_at, r.days_left, r.model, r.imei, r.note
-      ];
-      const result = await prisma.$executeRawUnsafe(qUpdate, ...vals);
-      if (result === 0) {
-        // Insert ako ne postoji
-        const qInsert = `INSERT INTO leads_import (
-          submission_id, country_code, first_name, last_name, email, phone, address, city, pickup_city,
-          contacted, handover_at, days_left, model, imei, note
-        ) VALUES ($1,'HR',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`;
-        await prisma.$executeRawUnsafe(qInsert, r.submission_id, r.first_name, r.last_name, r.email, r.phone, r.address, r.city, r.pickup_city,
-          r.contacted, r.handover_at, r.days_left, r.model, r.imei, r.note);
-      }
-      upserted++;
-    }
-    res.json({ upserted });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Import error' });
-  }
-});
 
 // 6) start server
 const PORT = Number(process.env.PORT || 8080);
