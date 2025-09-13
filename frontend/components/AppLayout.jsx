@@ -1,6 +1,7 @@
 // components/AppLayout.jsx
 import Link from "next/link";
 import { useRouter } from "next/router";
+import { useEffect } from "react";
 import CountrySwitcher from "./CountrySwitcher";
 import { getCurrentUser, getToken, parseJwt } from "../lib/auth";
 import { useActiveCountryCode } from "../lib/route";
@@ -21,15 +22,18 @@ export default function AppLayout({ children }) {
   const router = useRouter();
   const user = getCurrentUser();
   const token = getToken();
+  const activeCode = useActiveCountryCode();
+  const p = router.asPath;
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && !user && router.pathname !== "/login") {
+      router.replace("/login");
+    }
+  }, [router, user]);
 
   if (typeof window !== "undefined" && !user && router.pathname !== "/login") {
-    router.replace("/login");
     return null;
   }
-
-  const p = router.asPath;
-  const activeCode = useActiveCountryCode();
-  const withCode = (slug) => (activeCode ? `/c/${activeCode}${slug}` : slug);
 
   // PRIMJER niza linkova:
   const nav = [

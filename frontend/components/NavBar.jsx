@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { useRouter } from "next/router";
 import { getToken, parseJwt, TOKEN_KEY } from "../lib/auth";
 
@@ -23,7 +24,7 @@ export default function NavBar() {
       <div className="font-bold text-lg tracking-wide">TryBuy Inventory</div>
       <div className="flex items-center gap-4">
         {role === "SUPERADMIN" && (
-          <a href="/admin" className="text-blue-600 hover:underline font-medium">Admin</a>
+          <Link href="/admin" className="text-blue-600 hover:underline font-medium">Admin</Link>
         )}
         <button
           onClick={handleLogout}
