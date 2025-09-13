@@ -136,10 +136,10 @@ type ImportRow = {
   email?: string | null;
   phone?: string | null;
   pickup_city?: string | null;
-  date_contacted?: string | null; // ISO ili null
-  date_handover?: string | null;  // ISO ili null
+  contacted?: string | null; // ISO ili null
+  handover_at?: string | null;  // ISO ili null
   model?: string | null;
-  serial_number?: string | null;
+  serial?: string | null;
   note?: string | null;
 };
 
@@ -154,10 +154,10 @@ const mapUiToImportRow = (r: TryBuyRecord): ImportRow => {
     email: r.email || null,
     phone: r.phone || null,
     pickup_city: r.pickup_city || null,
-    date_contacted: r.contacted ? d(r.created_at ?? null) : null, // ako imaš zasebno polje za contacted date, mapiraj ga; ovo je fallback
-    date_handover: d(r.handover_at ?? null),
+    contacted: r.contacted || null,
+    handover_at: d(r.handover_at ?? null),
     model: r.model || null,
-    serial_number: r.serial || null,
+    serial: r.serial || null,
     note: r.note || null,
   };
 };
@@ -169,7 +169,7 @@ async function importToBackend(country: string, rows: TryBuyRecord[]) {
 
   const payload = {
     mode: "upsert",
-    rows: rows.map(mapUiToImportRow).filter(r => r.email || r.phone || r.serial_number),
+    rows: rows.map(mapUiToImportRow).filter(r => r.email || r.phone || r.serial,
   };
 
   const res = await fetch(`${API}/admin/galaxy-try/${String(country).toUpperCase()}/import?mode=upsert`, {
