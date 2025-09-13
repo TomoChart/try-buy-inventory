@@ -123,30 +123,6 @@ function GalaxyTryRSPage() {
     }
   }
 
-  async function handleContactedChange(id, checked) {
-    try {
-      const res = await fetch(`${API}/admin/galaxy-try/rs/${encodeURIComponent(id)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
-        body: JSON.stringify({ contacted: checked ? new Date().toISOString() : null }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        alert(data?.error || "Update failed");
-        return;
-      }
-      setRows(prev =>
-        prev.map(r =>
-          r.submission_id === id
-            ? { ...r, contacted: checked, contacted: checked ? new Date().toISOString() : null }
-            : r
-        )
-      );
-    } catch (err) {
-      console.error('handleContactedChange error', err);
-      alert('Greška pri spremanju kontakta.');
-    }
-  }
 
   const load = useCallback(async () => {
     try {
@@ -368,13 +344,7 @@ function GalaxyTryRSPage() {
                       <td>{r.city || "-"}</td>
                       <td>{r.pickup_city ?? "-"}</td>
                       <td>{fmtDateDMY(r.created_at)}</td>
-                      <td className="text-center">
-                        <input
-                          type="checkbox"
-                          checked={r.contacted}
-                          onChange={e => handleContactedChange(r.submission_id, e.target.checked)}
-                        />
-                      </td>
+                      <td className="text-center">{r.contacted ? "Yes" : "No"}</td>
                       <td>{fmtDateDMY(r.handover_at)}</td>
                       <td style={leftStyle}>{left === "" ? "" : left}</td>
                       <td>{r.model ?? "-"}</td>
