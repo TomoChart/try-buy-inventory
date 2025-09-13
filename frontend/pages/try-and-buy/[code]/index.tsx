@@ -117,6 +117,8 @@ function TryAndBuyPage() {
   }, [country]);
 
   const w30 = "w-[30ch]";
+  const w25 = "w-[25ch]";
+  const w22 = "w-[22ch]";
   const w20 = "w-[20ch]";
   const w12 = "w-[12ch]";
   const w10 = "w-[10ch]";
@@ -165,7 +167,7 @@ function TryAndBuyPage() {
       col("last_name", w12),
       col("email", w30, undefined, undefined, true),
       col("phone", w20),
-      col("address", w30),
+      col("address", w25),
       col("city", w10),
       col("postal_code", w6),
       col("pickup_city", w10),
@@ -181,7 +183,7 @@ function TryAndBuyPage() {
       },
       col("model", w12, SelectCell(["", "Fold7", "Watch8"])),
       col("serial", w12),
-      col("note", w12),
+      col("note", w22),
       {
         accessorKey: "returned",
         header: ({ column }) => (
@@ -288,6 +290,11 @@ function TryAndBuyPage() {
         });
         return Array.from(map.values());
       });
+      fetch(`/api/trybuy/${country}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(imported),
+      }).catch(() => toast.error("Save failed"));
       toast.success("Import complete");
       e.target.value = "";
     };
@@ -304,7 +311,9 @@ function TryAndBuyPage() {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ missionIds: ids }),
-    }).catch(() => toast.error("Delete failed"));
+    })
+      .catch(() => toast.error("Delete failed"))
+      .finally(() => setRowSelection({}));
   };
 
   return (
