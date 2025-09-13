@@ -862,3 +862,32 @@ function normalizeDateOnly(input) {
   // vrati Date na 00:00:00Z
   return new Date(`${s}T00:00:00Z`);
 }
+
+// ===== GALAXY TRY: generička LISTA po country code =====
+app.get('/admin/galaxy-try/:code/list',
+  requireAuth, requireRole('country_admin','superadmin'),
+  async (req, res) => {
+    try {
+      const code = String(req.params.code || '').toUpperCase();
+
+      // mapiranje country -> VIEW
+      const VIEW_MAP = {
+        HR: 'ui_galaxytry_hr_list',
+        SI: 'ui_galaxytry_si_list',
+        RS: 'ui_galaxytry_rs_list',
+      };
+
+      const view = VIEW_MAP[code];
+      if (!view) return res.status(400).json({ error: 'Unknown country code' });
+
+      // dinamičko ime view-a (identifier) mora ići unsafe; vrijednosti idu parametrizirano
+      const sql = `SELECT * FROM ${view}`;
+      const rows = await prisma.$queryRawUnsafe(sql);
+
+      res.json(rows);
+    } catch (err) {
+      console.error('GET /admin/galaxy-try/:code/list error', err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  }
+);

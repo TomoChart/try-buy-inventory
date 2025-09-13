@@ -1,6 +1,9 @@
 {
   "private": true,
-  "workspaces": ["frontend", "backend"],
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
     "dev": "npm run dev -w frontend",
     "build": "npm run build -w frontend && npm run build -w backend",
@@ -9,5 +12,8 @@
   },
   "devDependencies": {
     "tailwindcss": "^4.1.12"
+  },
+  "dependencies": {
+    "@tanstack/react-table": "^8.21.3"
   }
 }
