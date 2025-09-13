@@ -28,9 +28,10 @@ function DashboardPage() {
 
   const gtLink = code ? `/galaxy-try/${code}` : "/galaxy-try";
   const devLink = code ? `/c/${code}/devices` : "/devices";
+  const tryBuyLink = "/try-and-buy";
 
   return (
-    <div className="grid grid-cols-2 h-screen bg-gradient-to-br from-samsung-blue to-black">
+    <div className="grid grid-cols-3 h-screen bg-gradient-to-br from-samsung-blue to-black">
       <Link href={gtLink} className="relative block">
         <div
           className="absolute inset-0 bg-center bg-cover"
@@ -52,6 +53,21 @@ function DashboardPage() {
         <div className="relative flex h-full w-full items-center justify-center">
           <span className="text-white text-4xl md:text-5xl font-bold">
             DEVICES
+          </span>
+        </div>
+      </Link>
+      <Link href={tryBuyLink} className="relative block">
+        <div
+          className="absolute inset-0 bg-center bg-cover"
+          style={{
+            backgroundImage:
+              "linear-gradient(to bottom right, #1428A0, #1e3a8a)",
+          }}
+        />
+        <div className="absolute inset-0 bg-black/40" />
+        <div className="relative flex h-full w-full items-center justify-center">
+          <span className="text-white text-4xl md:text-5xl font-bold">
+            TRY & BUY
           </span>
         </div>
       </Link>
