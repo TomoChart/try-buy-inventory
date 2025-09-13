@@ -667,7 +667,7 @@ app.post('/admin/galaxy-try/hr/import',
       for (const r of rows) {
         if (!r.submission_id) continue;
 
-        // === Normalize created_at, date_contacted, date_handover ===
+        // === Normalize created_at, date_contacted, handover_at ===
         if (r.created_at) {
           let d = String(r.created_at);
           if (d.includes(' ')) d = d.split(' ')[0];
@@ -686,14 +686,14 @@ app.post('/admin/galaxy-try/hr/import',
           }
           r.date_contacted = new Date(`${d}T00:00:00Z`);
         }
-        if (r.date_handover) {
-          let d = String(r.date_handover);
+        if (r.handover_at) {
+          let d = String(r.handover_at);
           if (d.includes(' ')) d = d.split(' ')[0];
           if (/^\d{2}-\d{2}-\d{4}$/.test(d)) {
             const [day, mon, yr] = d.split('-');
             d = `${yr}-${mon}-${day}`;
           }
-          r.date_handover = new Date(`${d}T00:00:00Z`);
+          r.handover_at = new Date(`${d}T00:00:00Z`);
         }
 
         // Normalizacija ulaza
@@ -918,7 +918,7 @@ app.get('/admin/try-and-buy/:code/list',
           to_char(CAST(created_at AS date), 'YYYY-MM-DD')   AS created_at,
           CASE WHEN date_contacted IS NOT NULL THEN 'Yes' ELSE '' END
                                                AS contacted,
-          to_char(CAST(date_handover AS date), 'YYYY-MM-DD')
+          to_char(CAST(handover_at AS date), 'YYYY-MM-DD')
                                                AS handover_at,
           model                                 AS model,
           serial                                AS serial,
