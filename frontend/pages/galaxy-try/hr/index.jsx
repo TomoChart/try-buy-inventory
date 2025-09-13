@@ -634,25 +634,32 @@ async function handleImportGalaxyCsv(e) {
       if ("city"       in r) o.city       = r.city ?? null;
       if ("postal_code"in r) o.postal_code= r.postal_code ?? null;
       if ("pickup_city"in r) o.pickup_city= r.pickup_city ?? null;
-if ("created_at" in r) o.created_at = onlyDateISO(r.created_at);   // ← zadrži samo datum
+      if ("created_at" in r) o.created_at = onlyDateISO(r.created_at);   // date-only ISO
       if ("contacted"   in r) o.contacted   = contactedToISO(r.contacted);
       if ("handover_at" in r) o.handover_at = onlyDateISO(r.handover_at);
       if ("days_left" in r) {
         const n = Number(r.days_left);
         o.days_left = Number.isFinite(n) ? n : null;
       }
-
       if ("model" in r)  o.model = r.model ?? null;
-      // serial (umjesto IMEI u Galaxy Try)
-      if ("serial" in r) o.serial = toSerialString(r.serial);
-
+      if ("serial" in r) o.serial = toSerialString(r.serial);            // Galaxy Try = serial
       if ("note" in r)   o.note  = r.note ?? null;
       if ("form_name" in r) o.form_name = r.form_name ?? null;
-
       return o;
     }).filter(x => x.submission_id);
 
-    if (!out.length) { alert("Nema valjanih redova (submission_id nedostaje)."); return; }
+    // === DEBUG/PREVIEW & VALIDACIJA ===
+    console.log("[GT-HR IMPORT] Preview first 3 mapped rows:", out.slice(0,3));
+    const missing = [];
+    const hdr = Object.keys(out[0] || {});
+    if (!hdr.includes("created_at")) missing.push("created_at");
+    if (!hdr.includes("serial")) missing.push("serial");
+    if (!hdr.includes("handover_at")) missing.push("handover_at");
+    if (!hdr.includes("model")) missing.push("model");
+    if (!hdr.includes("note")) missing.push("note");
+    if (missing.length) {
+      alert("Upozorenje: neka polja nisu prepoznata iz zaglavlja i neće se uvesti: " + missing.join(", "));
+    }
 
     // 3) POST na HR import (upsert) – backend sada prima created_at + serial i vraća listu s created_at/serial
     const token = getToken();
