@@ -18,6 +18,15 @@ function toIsoOrNull(d) {
   if (!d) return null;
   try { return new Date(d).toISOString(); } catch { return null; }
 }
+function toIsoDateOnly(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (isNaN(d)) return null;
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return new Date(`${y}-${m}-${day}T00:00:00Z`).toISOString();
+}
 
 function DetailPage() {
   const router = useRouter();
@@ -37,6 +46,7 @@ function DetailPage() {
   // date pickers
   const [contactedAt, setContactedAt] = useState(null);
   const [handoverAt, setHandoverAt] = useState(null);
+  const [createdAt, setCreatedAt] = useState(null);
 
   useEffect(() => {
     if (!id) return;
@@ -51,14 +61,15 @@ function DetailPage() {
 
         // map backend HR keys -> local state
         setEmail(data["E-mail"] ?? "");
-        setPhone(data["Telefon"] ?? "");
+        setPhone(data["Phone"] ?? "");
         setPickupCity(data["Grad preuzimanja"] ?? data["Pickup City"] ?? "");
         setModel(data["Model"] ?? "");
-        setSerial(data["IMEI"] ?? "");
-        setNote(data["Bilješka"] ?? "");
+        setSerial(data["Serial"] ?? "");
+        setNote(data["Note"] ?? "");
 
-        setContactedAt(toDateOrNull(data["Kontaktiran"]));
-        setHandoverAt(toDateOrNull(data["Predaja uređaja"]));
+        setContactedAt(toDateOrNull(data["Contacted"]));
+        setHandoverAt(toDateOrNull(data["Handover"]));
+        setCreatedAt(toDateOrNull(data["Created_at"] || data["Created At"]));
       } catch (e) {
         setErr(e.message);
       }
@@ -73,9 +84,10 @@ function DetailPage() {
         phone: phone || null,
         pickup_city: pickupCity || null,
         contacted: toIsoOrNull(contactedAt),
+        created_at: toIsoDateOnly(createdAt),
         handover_at: toIsoOrNull(handoverAt),
         model: model || null,
-        imei: serial || null,
+        serial: serial || null,
         note: note || null,
       };
       const r = await fetch(`${API}/admin/galaxy-try/hr/${id}`, {
@@ -133,12 +145,22 @@ function DetailPage() {
               {/* ako želiš dropdown, stavi options; zasad text */}
               <input className="w-full border rounded px-2 py-1" value={pickupCity} onChange={(e)=>setPickupCity(e.target.value)} placeholder="Zagreb / Split" />
             </LabeledInput>
+<LabeledInput label="Created At">
+  <DatePicker
+    selected={createdAt}
+    onChange={(d)=>setCreatedAt(d)}
+    dateFormat="yyyy-MM-dd"
+    isClearable
+    className="w-full border rounded px-2 py-1"
+    placeholderText="YYYY-MM-DD"
+  />
+</LabeledInput>
 
             <LabeledInput label="Model">
               <input className="w-full border rounded px-2 py-1" value={model} onChange={(e)=>setModel(e.target.value)} />
             </LabeledInput>
 
-            <LabeledInput label="IMEI">
+            <LabeledInput label="Serial">
               <input className="w-full border rounded px-2 py-1" value={serial} onChange={(e)=>setSerial(e.target.value)} />
             </LabeledInput>
 

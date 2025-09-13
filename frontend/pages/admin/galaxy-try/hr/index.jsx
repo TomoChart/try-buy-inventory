@@ -1,6 +1,8 @@
 import React, { useEffect, useState, Fragment } from "react";
 import withAuth from "../../../../components/withAuth";
 import { API, getToken } from "../../../../lib/auth";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 function getVal(row, keys) {
   for (const k of keys) {
@@ -13,6 +15,16 @@ function fmtDate(v) {
   const d = new Date(v);
   return isNaN(d.getTime()) ? String(v) : d.toLocaleDateString("hr-HR");
 }
+function onlyDateISO(value) {
+  if (!value) return null;
+  // prima Date ili string, vraća ISO s vremenom na 00:00:00Z
+  const d = new Date(value);
+  if (isNaN(d)) return null;
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return new Date(`${y}-${m}-${day}T00:00:00Z`).toISOString();
+}
 
 function GalaxyTryHRPage() {
   const [rows, setRows] = useState([]);
@@ -20,6 +32,11 @@ function GalaxyTryHRPage() {
   const [err, setErr] = useState("");
   const [expanded, setExpanded] = useState(null);
   const [detail, setDetail] = useState(null);
+
+  // date pickers
+  const [contactedAt, setContactedAt] = useState(null);
+  const [handoverAt, setHandoverAt] = useState(null);
+  const [createdAt, setCreatedAt] = useState(null);
 
   useEffect(() => {
     async function load() {
@@ -52,7 +69,13 @@ function GalaxyTryHRPage() {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
       if (!r.ok) throw new Error();
-      setDetail(await r.json());
+      const data = await r.json();
+      setDetail(data);
+
+      // Napuni date pickere iz detalja
+      setContactedAt(toDateOrNull(data["Kontaktiran"]));
+      setHandoverAt(toDateOrNull(data["Predaja uređaja"]));
+      setCreatedAt(toDateOrNull(data["Datum prijave"] || data["Created At"]));
     } catch {
       setDetail({ error: "Ne mogu dohvatiti detalje." });
     }
@@ -86,8 +109,8 @@ function GalaxyTryHRPage() {
               const lastName = getVal(r, ["Prezime", "last_name"]);
               const post = getVal(r, ["Pošta", "postal_code", "post_code"]);
               const pickupCity = getVal(r, ["Grad preuzimanja", "pickup_city"]);
-              const dateCreated = fmtDate(getVal(r, ["Datum prijave", "created_at"]));
-              const dateHandover = fmtDate(getVal(r, ["Datum predaje", "handover_at"]));
+              const createdAt = fmtDate(getVal(r, ["Datum prijave", "created_at"]));
+              const handoverAt = fmtDate(getVal(r, ["Datum predaje", "handover_at"]));
 
               return (
                 <Fragment key={id}>
@@ -96,8 +119,8 @@ function GalaxyTryHRPage() {
                     <td className="p-2">{lastName}</td>
                     <td className="p-2">{post}</td>
                     <td className="p-2">{pickupCity}</td>
-                    <td className="p-2">{dateCreated}</td>
-                    <td className="p-2">{dateHandover}</td>
+                    <td className="p-2">{createdAt}</td>
+                    <td className="p-2">{handoverAt}</td>
                     <td className="p-2">
                       <button
                         className="px-2 py-1 rounded bg-blue-600 text-white"

@@ -49,7 +49,7 @@ function GalaxyTryHRPage() {
     setFPhone(r["Phone"] || "");
     setFPickupCity(r["Pickup City"] || "");
     setFModel(r["Model"] || "");
-      setFSerial(r["IMEI"] || "");
+      setFSerial(r["Serial"] || "");
       setFContacted(!!(r["Contacted"] || r.contacted));
       setFHandover(r["Handover At"] ? toDateOnly(r["Handover At"]) : "");
   }
@@ -66,7 +66,7 @@ function GalaxyTryHRPage() {
         contacted: fContacted ? new Date().toISOString() : null,
       handover_at: fHandover ? new Date(fHandover).toISOString() : null,
       model: fModel || null,
-      imei: fSerial || null,
+      serial: fSerial || null,
     };
     const r = await fetch(`${API}/admin/galaxy-try/hr/${id}`, {
       method: "PATCH",
@@ -97,7 +97,7 @@ function GalaxyTryHRPage() {
       created_at:     r.created_at     ?? r["Created At"]     ?? "",
       handover_at:  r.handover_at  ?? r["Handover At"]    ?? "",
       model:          r.model          ?? r["Model"]          ?? "",
-      imei:  r.imei  ?? r["IMEI"]  ?? "",
+      serial:        r.serial        ?? r["Serial"]        ?? "",
       note:           r.note           ?? r["Note"]           ?? "",
       contacted: Boolean(contacted),
     };
@@ -247,7 +247,7 @@ function GalaxyTryHRPage() {
       { key: "handover_at", label: "Handover At" },
     { key: "daysLeft", label: "Days left" },
     { key: "model", label: "Model" },
-    { key: "imei", label: "IMEI" },
+    { key: "serial", label: "Serial" },
     { key: "note", label: "Note" },
   ];
 
@@ -379,7 +379,7 @@ function GalaxyTryHRPage() {
                       <td>{fmtDateDMY(r.handover_at)}</td>
                       <td style={leftStyle}>{left === "" ? "" : left}</td>
                       <td>{r.model ?? "-"}</td>
-                      <td>{r.imei ?? "-"}</td>
+                      <td>{r.serial ?? "-"}</td>
                       <td>{r.note ?? "-"}</td>
                       <td className="p-2 whitespace-nowrap">
                         <button
@@ -481,7 +481,7 @@ function daysLeft(handover_at) {
 const LEAD_FIELDS = [
   "submission_id","created_at","first_name","last_name","email","phone",
   "address","city","postal_code","pickup_city","contacted",
-  "handover_at","days_left","model","imei","note","form_name",
+  "handover_at","days_left","model","serial","note","form_name",
 ];
 
 const ALIASES = {
@@ -494,9 +494,9 @@ const ALIASES = {
   "contacted at": "contacted",
   "contacted yes-no": "contacted",   // ← tvoje stvarno zaglavlje
   "days left": "days_left", "daysleft": "days_left",
-  // kompatibilnost s device CSV-ovima (ne smeta)
-  "s/n": "imei", "sn": "imei", "serial": "imei",
-  "imei1": "imei", "imei_1": "imei", "imei 1": "imei"
+ // serial varijante (Galaxy Try koristi serial, ne imei)
+  "serial": "serial", "serial number": "serial", "serial_number": "serial",
+  "s/n": "serial", "sn": "serial",
 };
 
 function guessMap(headers) {
@@ -507,7 +507,7 @@ function guessMap(headers) {
     const alias = ALIASES[key];
     if (alias && LEAD_FIELDS.includes(alias)) { map[raw] = alias; return; }
     if (LEAD_FIELDS.includes(key)) { map[raw] = key; return; }
-    if (key === "s/n" || key === "s\\n" || key === "imei1") map[raw] = "imei";
+    if (key === "s/n" || key === "s\\n" || key === "serial") map[raw] = "serial";
   });
   return map;
 }
@@ -524,25 +524,86 @@ function excelDateToISO(v) {
   return isNaN(d) ? null : d.toISOString();
 }
 
-function contactedToISO(v) {
-  if (v == null) return null;
-  const s = String(v).trim().toLowerCase();
-  if (["yes","true","da","1"].includes(s)) return new Date().toISOString();
-  if (["no","false","ne","0",""].includes(s)) return null;
-  return excelDateToISO(v); // ako je već datum
+// Fallback mapiranje zaglavlja -> očekivana polja (case-insensitive)
+const HEADER_MAP = {
+  // serial (nekad je bio IMEI, S/N, serial number…)
+  "imei": "serial",
+  "imei1": "serial",
+  "s/n": "serial",
+  "sn": "serial",
+  "serial number": "serial",
+  "serial_number": "serial",
+  "serialno": "serial",
+
+  // created_at
+  "created at": "created_at",
+  "creation date": "created_at",
+  "date created": "created_at",
+
+  // contacted / handover
+  "contacted yes-no": "contacted",
+  "contacted at": "contacted",
+  "date contacted": "contacted",
+  "date_contacted": "contacted",
+  "handover at": "handover_at",
+  "date handover": "handover_at",
+  "date_handover": "handover_at",
+
+  // days left
+  "days left": "days_left",
+  "daysleft": "days_left",
+
+  // form name
+  "form name (id)": "form_name",
+  "form_name_(id)": "form_name",
+};
+
+function toLowerKey(k) { return String(k || "").trim().toLowerCase(); }
+function mapHeaders(obj) {
+  const o = {};
+  for (const [k, v] of Object.entries(obj || {})) {
+    const low = toLowerKey(k);
+    o[HEADER_MAP[low] || low] = v;
+  }
+  return o;
 }
 
-function toImeiString(v) {
+function onlyDateISO(v) {
+  if (v == null || v === "") return null;
+  let s = String(v).trim();
+  // odbaci vrijeme (ako postoji)
+  if (s.includes(" ")) s = s.split(" ")[0];
+  if (s.includes("T")) s = s.split("T")[0];
+  // DD-MM-YYYY -> YYYY-MM-DD
+  if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
+    const [dd, mm, yyyy] = s.split("-");
+    s = `${yyyy}-${mm}-${dd}`;
+  }
+  // učvrsti na ponoć (UTC)
+  const d = new Date(`${s}T00:00:00Z`);
+  return isNaN(d) ? null : d.toISOString();
+}
+
+function contactedToISO(v) {
+  if (v == null || v === "") return null;
+  const s = String(v).trim().toLowerCase();
+  if (["yes","da","true","1"].includes(s)) return new Date().toISOString();
+  if (["no","ne","false","0"].includes(s)) return null;
+  // ako je već datum
+  return onlyDateISO(v);
+}
+
+function toSerialString(v) {
   if (v == null) return "";
-  return String(v).trim().replace(/\s+/g, "");
+  return String(v).trim();
 }
 
 async function handleImportGalaxyCsv(e) {
   const f = e.target.files?.[0];
   if (!f) return;
   try {
-    let rows = [];
     const name = (f.name || "").toLowerCase();
+    let rows = [];
 
     if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
       const buf = await f.arrayBuffer();
@@ -558,25 +619,42 @@ async function handleImportGalaxyCsv(e) {
 
     if (!rows.length) { alert("Nema redaka u datoteci."); return; }
 
-    const headers = Object.keys(rows[0] || {});
-    const map = guessMap(headers);
+    // 1) mapiraj zaglavlja (fallback)
+    const normalized = rows.map(mapHeaders);
 
-    const normRows = rows.map(r => {
-      const out = {};
-      for (const [src, dst] of Object.entries(map)) {
-        let v = r[src];
-        if (dst === "imei") v = toImeiString(v);
-        else if (dst === "created_at" || dst === "handover_at") v = excelDateToISO(v);
-        else if (dst === "contacted") v = contactedToISO(v);
-        else if (dst === "days_left") v = (v === "" ? null : Number(v));
-        else v = v ?? "";
-        out[dst] = v;
+    // 2) normaliziraj polja za Galaxy Try
+    const out = normalized.map(r => {
+      const o = {};
+      if (r.submission_id) o.submission_id = String(r.submission_id).trim();
+      if ("first_name" in r) o.first_name = r.first_name ?? null;
+      if ("last_name"  in r) o.last_name  = r.last_name ?? null;
+      if ("email"      in r) o.email      = r.email ?? null;
+      if ("phone"      in r) o.phone      = r.phone ?? null;
+      if ("address"    in r) o.address    = r.address ?? null;
+      if ("city"       in r) o.city       = r.city ?? null;
+      if ("postal_code"in r) o.postal_code= r.postal_code ?? null;
+      if ("pickup_city"in r) o.pickup_city= r.pickup_city ?? null;
+if ("created_at" in r) o.created_at = onlyDateISO(r.created_at);   // ← zadrži samo datum
+      if ("contacted"   in r) o.contacted   = contactedToISO(r.contacted);
+      if ("handover_at" in r) o.handover_at = onlyDateISO(r.handover_at);
+      if ("days_left" in r) {
+        const n = Number(r.days_left);
+        o.days_left = Number.isFinite(n) ? n : null;
       }
-      return out;
-    }).filter(r => r.submission_id);
 
-    if (!normRows.length) { alert("Nema valjanih redova (submission_id nedostaje)."); return; }
+      if ("model" in r)  o.model = r.model ?? null;
+      // serial (umjesto IMEI u Galaxy Try)
+      if ("serial" in r) o.serial = toSerialString(r.serial);
 
+      if ("note" in r)   o.note  = r.note ?? null;
+      if ("form_name" in r) o.form_name = r.form_name ?? null;
+
+      return o;
+    }).filter(x => x.submission_id);
+
+    if (!out.length) { alert("Nema valjanih redova (submission_id nedostaje)."); return; }
+
+    // 3) POST na HR import (upsert) – backend sada prima created_at + serial i vraća listu s created_at/serial
     const token = getToken();
     if (!token) { alert("Nema tokena. Prijavi se ponovno."); return; }
 
@@ -584,7 +662,7 @@ async function handleImportGalaxyCsv(e) {
     const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ rows: normRows })
+      body: JSON.stringify({ rows: out })
     });
     const dataRes = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(dataRes?.error || "Import failed");
@@ -599,20 +677,22 @@ async function handleImportGalaxyCsv(e) {
 }
 
 function EditForm({ initial, onCancel, onSaved }) {
-    const [form, setForm] = useState({
-      first_name:     initial.first_name || "",
-      last_name:      initial.last_name  || "",
-      email:          initial.email      || "",
-      phone:          initial.phone      || "",
-      address:        initial.address    || "",
-      city:           initial.city       || "",
-      pickup_city:    initial.pickup_city|| "",
-      contacted:      !!initial.contacted,
-      handover_at:  initial.handover_at  || "",
-      model:          initial.model          || "",
-      imei:  initial.imei  || "",
-      note:           initial.note           || "",
-    });
+  const [form, setForm] = useState({
+    first_name:     initial.first_name || "",
+    last_name:      initial.last_name  || "",
+    email:          initial.email      || "",
+    phone:          initial.phone      || "",
+    address:        initial.address    || "",
+    city:           initial.city       || "",
+    pickup_city:    initial.pickup_city|| "",
+    // 👇 new
+    created_at:     toInputDateValue(initial.created_at),
+    contacted:      !!initial.contacted,
+    handover_at:    initial.handover_at  || "",
+    model:          initial.model          || "",
+    serial:         initial.serial         || "",
+    note:           initial.note           || "",
+  });
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -626,6 +706,8 @@ function EditForm({ initial, onCancel, onSaved }) {
         },
         body: JSON.stringify({
           ...form,
+          // 👇 normalize created_at to ISO date only
+          created_at: onlyDateISO(form.created_at),
           contacted: form.contacted ? new Date().toISOString() : null,
         })
       });
@@ -670,10 +752,11 @@ function EditForm({ initial, onCancel, onSaved }) {
         <Field name="address"    label="Address" />
         <Field name="city"       label="City" />
         <Field name="pickup_city"    label="Pickup City" />
+        <Field name="created_at"  label="Created At"  type="date" />
         <Field name="contacted" label="Contacted Yes/No" type="checkbox" />
         <Field name="handover_at"  label="Handover At"  type="date" />
         <Field name="model"          label="Model" />
-        <Field name="imei"  label="IMEI" />
+        <Field name="serial"  label="Serial" />
         <Field name="note"           label="Note" />
       </div>
       <div className="mt-4 flex justify-end gap-2">
@@ -695,7 +778,8 @@ function EditForm({ initial, onCancel, onSaved }) {
       first_name: "", last_name: "", email: "", phone: "",
       address: "", city: "", pickup_city: "",
       contacted: false, handover_at: "",
-      model: "", imei: "", note: ""
+      model: "", serial: "", note: "",
+      created_at: ""
     });
     const [saving, setSaving] = useState(false);
 
@@ -754,10 +838,11 @@ function EditForm({ initial, onCancel, onSaved }) {
         <Field name="address"    label="Address" />
         <Field name="city"       label="City" />
         <Field name="pickup_city"    label="Pickup City" />
+        <Field name="created_at"  label="Created At"  type="date" />
         <Field name="contacted" label="Contacted Yes/No" type="checkbox" />
         <Field name="handover_at"  label="Handover At"  type="date" />
         <Field name="model"          label="Model" />
-        <Field name="imei"  label="IMEI" />
+        <Field name="serial"  label="Serial" />
         <Field name="note"           label="Note" />
       </div>
 

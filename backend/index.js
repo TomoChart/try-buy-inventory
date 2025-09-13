@@ -300,7 +300,7 @@ app.get('/admin/galaxy-try/hr/list',
 
 // -------- PATCH: GALAXY TRY (edit po submission_id) ------------------------
 // PATCH /admin/galaxy-try/:code/:id
-// Body: { email?, phone?, pickup_city?, contacted?, handover_at?, model?, imei?, note? }
+// Body: { email?, phone?, pickup_city?, created_at?, contacted?, handover_at?, model?, serial?, note? }
 app.patch(
   "/admin/galaxy-try/:code/:id",
   requireAuth,
@@ -317,11 +317,12 @@ app.patch(
         "email",
         "phone",
         "pickup_city",
+        "created_at",
         "contacted",
         "handover_at",
         "days_left",
         "model",
-        "imei",
+        "serial",
         "note",
       ];
 
@@ -336,8 +337,9 @@ app.patch(
       // jednostavne validacije (po potrebi proširi)
       const isoOrNull = (v) =>
         v == null || v === "" ? null : new Date(v).toString() !== "Invalid Date" ? v : null;
-      if ("contacted" in payload) payload.contacted = isoOrNull(payload.contacted);
+      if ("contacted" in payload)   payload.contacted   = isoOrNull(payload.contacted);
       if ("handover_at" in payload) payload.handover_at = isoOrNull(payload.handover_at);
+      if ("created_at" in payload)  payload.created_at  = normalizeDateOnly(payload.created_at);
 
       // update preko submission_id i country_code
       const sql = `
@@ -348,15 +350,16 @@ app.patch(
           address = COALESCE($3, address),
           city = COALESCE($4, city),
           pickup_city = COALESCE($5, pickup_city),
-          contacted = COALESCE($6, contacted),
-          handover_at = COALESCE($7, handover_at),
-          days_left = COALESCE($8, days_left),
-          model = COALESCE($9, model),
-          imei = COALESCE($10, imei),
-          note = COALESCE($11, note)
-        WHERE submission_id = $12 AND country_code = $13
+          created_at = COALESCE($6, created_at),
+          contacted = COALESCE($7, contacted),
+          handover_at = COALESCE($8, handover_at),
+          days_left = COALESCE($9, days_left),
+          model = COALESCE($10, model),
+          serial = COALESCE($11, serial),
+          note = COALESCE($12, note)
+        WHERE submission_id = $13 AND country_code = $14
         RETURNING
-          submission_id, email, phone, address, city, pickup_city, contacted, handover_at, days_left, model, imei, note
+          submission_id, email, phone, address, city, pickup_city, created_at, contacted, handover_at, days_left, model, serial, note
       `;
 
       const vals = [
@@ -365,11 +368,12 @@ app.patch(
         payload.address ?? null,
         payload.city ?? null,
         payload.pickup_city ?? null,
+        payload.created_at ?? null,
         payload.contacted ?? null,
         payload.handover_at ?? null,
         payload.days_left ?? null,
         payload.model ?? null,
-        payload.imei ?? null,
+        payload.serial ?? null,
         payload.note ?? null,
         id,
         code,
@@ -399,9 +403,9 @@ app.patch('/admin/galaxy-try/:code/:submission_id',
 
       const ALLOWED = new Set([
         'first_name','last_name','email','phone',
-        'address','city','pickup_city',
+        'address','city','pickup_city','created_at',
         'contacted','handover_at','days_left',
-        'model','imei','note'
+        'model','serial','note'
       ]);
 
       // zadrži samo dozvoljena polja koja su poslana
@@ -411,6 +415,11 @@ app.patch('/admin/galaxy-try/:code/:submission_id',
       }
       if (!Object.keys(input).length) {
         return res.status(400).json({ error: 'Nothing to update' });
+      }
+
+      // === Normalize created_at ===
+      if ("created_at" in input) {
+        input.created_at = normalizeDateOnly(input.created_at);
       }
 
       // dinamički SET dio za UPDATE
@@ -429,7 +438,6 @@ app.patch('/admin/galaxy-try/:code/:submission_id',
           AND country_code  = $${cols.length+2}
         RETURNING
           submission_id    AS "Submission ID",
-          created_at       AS "Created At",
           first_name       AS "First Name",
           last_name        AS "Last Name",
           email            AS "Email",
@@ -437,11 +445,12 @@ app.patch('/admin/galaxy-try/:code/:submission_id',
           address          AS "Address",
           city             AS "City",
           pickup_city      AS "Pickup City",
-          contacted   AS "Contacted At",
-          handover_at    AS "Handover At",
+          created_at       AS "Created At",
+          contacted        AS "Contacted At",
+          handover_at      AS "Handover At",
           days_left       AS "Days Left",
           model            AS "Model",
-          imei    AS "IMEI",
+          serial          AS "Serial",
           note             AS "Note"
       `;
       const rows = await prisma.$queryRawUnsafe(sql, ...params);
@@ -467,8 +476,8 @@ app.post('/admin/galaxy-try/:code',
       const ALLOWED = new Set([
         'first_name','last_name','email','phone',
         'address','city','pickup_city',
-        'contacted','handover_at','days_left',
-        'model','imei','note'
+        'created_at','contacted','handover_at','days_left',
+        'model','serial','note'
       ]);
 
       const b = req.body || {};
@@ -480,7 +489,19 @@ app.post('/admin/galaxy-try/:code',
       // submission_id generiramo ako nije poslan
       const submission_id = String(b.submission_id || crypto.randomUUID());
 
-      // normalizacija datuma (ako su došli kao "YYYY-MM-DD")
+      // === Normalize created_at (remove time, parse date) ===
+      if (payload.created_at) {
+        let dateStr = String(payload.created_at);
+        if (dateStr.includes(' ')) dateStr = dateStr.split(' ')[0];      // drop time if "YYYY-MM-DD HH:MM:SS"
+        else if (dateStr.includes('T')) dateStr = dateStr.split('T')[0]; // drop time if ISO string
+        // If in DD-MM-YYYY format, convert to YYYY-MM-DD
+        if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
+          const [d, m, y] = dateStr.split('-');
+          dateStr = `${y}-${m}-${d}`;
+        }
+        payload.created_at = new Date(`${dateStr}T00:00:00Z`);
+      }
+      // ...existing normalization for contacted, handover_at...
       if (payload.contacted) payload.contacted = new Date(payload.contacted);
       if (payload.handover_at)  payload.handover_at  = new Date(payload.handover_at);
 
@@ -508,7 +529,7 @@ app.post('/admin/galaxy-try/:code',
           handover_at        AS handover_at,
           days_left            AS days_left,
           model                AS model,
-          imei        AS imei,
+          serial               AS serial,
           note                 AS note
       `;
       const rows = await prisma.$queryRawUnsafe(sql, ...vals);
@@ -574,7 +595,6 @@ app.get('/admin/galaxy-try/:code/list',
       const sql = `
         SELECT
           submission_id    AS "Submission ID",
-          created_at       AS "Created At",
           first_name       AS "First Name",
           last_name        AS "Last Name",
           email            AS "Email",
@@ -582,10 +602,11 @@ app.get('/admin/galaxy-try/:code/list',
           address          AS "Address",
           city             AS "City",
           pickup_city      AS "Pickup City",
-          contacted   AS "Contacted At",
-          handover_at    AS "Handover At",
+          created_at       AS "Created At",
+          contacted        AS "Contacted At",
+          handover_at      AS "Handover At",
           model            AS "Model",
-          imei    AS "IMEI",
+          serial          AS "Serial",
           note             AS "Note"
         FROM leads_import
         WHERE country_code = $1
@@ -617,12 +638,41 @@ app.post('/admin/galaxy-try/hr/import',
       };
       const numOrNull = (v) => (v === '' || v == null ? null : Number.isFinite(Number(v)) ? Number(v) : null);
       const strOrNull = (v) => (v == null || v === '' ? null : String(v));
-      const imeiStr   = (v) => (v == null ? null : String(v).replace(/\s+/g,''));
+      const serialStr   = (v) => (v == null ? null : String(v).replace(/\s+/g,''));
 
       let upserted = 0;
 
       for (const r of rows) {
         if (!r.submission_id) continue;
+
+        // === Normalize created_at, date_contacted, date_handover ===
+        if (r.created_at) {
+          let d = String(r.created_at);
+          if (d.includes(' ')) d = d.split(' ')[0];
+          if (/^\d{2}-\d{2}-\d{4}$/.test(d)) {
+            const [day, mon, yr] = d.split('-');
+            d = `${yr}-${mon}-${day}`;
+          }
+          r.created_at = new Date(`${d}T00:00:00Z`);
+        }
+        if (r.date_contacted) {
+          let d = String(r.date_contacted);
+          if (d.includes(' ')) d = d.split(' ')[0];
+          if (/^\d{2}-\d{2}-\d{4}$/.test(d)) {
+            const [day, mon, yr] = d.split('-');
+            d = `${yr}-${mon}-${day}`;
+          }
+          r.date_contacted = new Date(`${d}T00:00:00Z`);
+        }
+        if (r.date_handover) {
+          let d = String(r.date_handover);
+          if (d.includes(' ')) d = d.split(' ')[0];
+          if (/^\d{2}-\d{2}-\d{4}$/.test(d)) {
+            const [day, mon, yr] = d.split('-');
+            d = `${yr}-${mon}-${day}`;
+          }
+          r.date_handover = new Date(`${d}T00:00:00Z`);
+        }
 
         // Normalizacija ulaza
         const p = {
@@ -638,7 +688,7 @@ app.post('/admin/galaxy-try/hr/import',
           handover_at: isoOrNull(r.handover_at),
           days_left:   numOrNull(r.days_left),
           model:       strOrNull(r.model),
-          imei:        imeiStr(r.imei),
+          serial:      serialStr(r.serial),
           note:        strOrNull(r.note),
         };
 
@@ -657,7 +707,7 @@ app.post('/admin/galaxy-try/hr/import',
             handover_at = COALESCE($11, handover_at),
             days_left   = COALESCE($12, days_left),
             model       = COALESCE($13, model),
-            imei        = COALESCE($14, imei),
+            serial      = COALESCE($14, serial),
             note        = COALESCE($15, note),
             updated_at  = NOW()
           WHERE submission_id = $1 AND country_code = 'HR'
@@ -667,7 +717,7 @@ app.post('/admin/galaxy-try/hr/import',
           p.first_name, p.last_name, p.email, p.phone,
           p.address, p.city, p.pickup_city,
           p.created_at, p.contacted, p.handover_at,
-          p.days_left, p.model, p.imei, p.note
+          p.days_left, p.model, p.serial, p.note
         ];
         const updated = await prisma.$executeRawUnsafe(qU, ...vU);
 
@@ -677,7 +727,7 @@ app.post('/admin/galaxy-try/hr/import',
             INSERT INTO leads_import (
               submission_id, country_code,
               first_name,last_name,email,phone,address,city,pickup_city,
-              created_at,contacted,handover_at,days_left,model,imei,note,
+              created_at,contacted,handover_at,days_left,model,serial,note,
               updated_at
             ) VALUES (
               $1,'HR',
@@ -691,7 +741,7 @@ app.post('/admin/galaxy-try/hr/import',
             p.first_name, p.last_name, p.email, p.phone,
             p.address, p.city, p.pickup_city,
             p.created_at, p.contacted, p.handover_at,
-            p.days_left, p.model, p.imei, p.note
+            p.days_left, p.model, p.serial, p.note
           ];
           await prisma.$executeRawUnsafe(qI, ...vI);
         }
@@ -774,3 +824,19 @@ app.post('/adminusers',
     }
   }
 );
+
+// Dodaj helper na vrh (npr. uz ostale helper funkcije)
+function normalizeDateOnly(input) {
+  if (input == null || input === "") return null;
+  let s = String(input);
+  // odbaci vrijeme ako postoji (npr. "YYYY-MM-DD HH:MM:SS" ili ISO)
+  if (s.includes(" ")) s = s.split(" ")[0];
+  else if (s.includes("T")) s = s.split("T")[0];
+  // "DD-MM-YYYY" → "YYYY-MM-DD"
+  if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
+    const [d, m, y] = s.split("-");
+    s = `${y}-${m}-${d}`;
+  }
+  // vrati Date na 00:00:00Z
+  return new Date(`${s}T00:00:00Z`);
+}

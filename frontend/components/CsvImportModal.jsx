@@ -13,9 +13,9 @@ const DEVICE_FIELDS = [
 ];
 
 const LEAD_FIELDS = [
-  "submission_id","created_at","first_name","last_name","email","phone",
-  "address","city","postal_code","pickup_city","contacted",
-  "handover_at","days_left","model","imei","note","form_name"
+  "submission_id","first_name","last_name","email","phone",
+  "address","city","postal_code","pickup_city","created_at","contacted",
+  "handover_at","days_left","model","serial","note","form_name"
 ];
 
 // heuristika za automatsko mapiranje
@@ -35,6 +35,9 @@ const ALIASES = {
   "contacted at": "contacted",
   "contacted yes-no": "contacted", // NOVO
   "days left": "days_left", "daysleft": "days_left",
+  // fallback za serial (ako dođe „IMEI”, „S/N”, „serial number”…) 
+"imei": "serial", "imei1": "serial", "imei 1": "serial", "imei_1": "serial",
+"s/n": "serial", "sn": "serial", "serial number": "serial", "serial_number": "serial",
 };
 
 function guessMap(headers, kind) {
@@ -60,7 +63,7 @@ function guessMap(headers, kind) {
   return map;
 }
 
-// === HELPER FUNKCIJE ===
+// === GORNJE FUNKCIJE (ostavi i koristi ove) ===
 function excelDateToISO(v) {
   if (v == null || v === "") return null;
   if (typeof v === "number") {
@@ -79,59 +82,9 @@ function contactedToISO(v) {
   if (["no","false","ne","0",""].includes(s)) return null;
   return excelDateToISO(v);
 }
-function toImeiString(v) {
+function toSerialString(v) {
   if (v == null) return "";
-  return String(v).trim().replace(/\s+/g, "");
-}
-
-// === NOVI HANDLER ===
-function handleFile(f) {
-  setFile(f);
-
-  const name = (f.name || "").toLowerCase();
-  const loadCsv = () => new Promise((resolve, reject) => {
-    Papa.parse(f, { header: true, skipEmptyLines: true, complete: resolve, error: reject });
-  });
-
-  (async () => {
-    let data = [];
-    if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
-      const buf = await f.arrayBuffer();
-      const wb = XLSX.read(buf, { cellDates: true });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      data = XLSX.utils.sheet_to_json(ws, { defval: "" }); // sve vrijednosti, bez undefined
-      const hdrs = data.length ? Object.keys(data[0]) : [];
-      setRows(data);
-      setHeaders(hdrs);
-      setMap(guessMap(hdrs, kind));
-    } else {
-      const res = await loadCsv();
-      const rows = Array.isArray(res.data) ? res.data : [];
-      const hdrs = res.meta?.fields || Object.keys(rows[0] || {});
-      setRows(rows);
-      setHeaders(hdrs);
-      setMap(guessMap(hdrs, kind));
-    }
-  })();
-}
-
-function buildPayload() {
-  return rows.map(r => {
-    const o = {};
-    for (const [src, dst] of Object.entries(map)) {
-      if (!dst) continue;
-      let v = r[src];
-
-      if (kind === "leads") {
-        if (dst === "imei") v = toImeiString(v);
-        else if (dst === "created_at" || dst === "handover_at") v = excelDateToISO(v);
-        else if (dst === "contacted") v = contactedToISO(v);
-        else if (dst === "days_left") v = (v === "" ? null : Number(v));
-      }
-      o[dst] = v ?? null;
-    }
-    return o;
-  });
+  return String(v).trim();
 }
 
 export default function CsvImportModal({ onClose, countryCode = "HR", kind = "devices" }) {
@@ -145,32 +98,51 @@ export default function CsvImportModal({ onClose, countryCode = "HR", kind = "de
 
   function handleFile(f) {
     setFile(f);
-    Papa.parse(f, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (res) => {
-        const data = Array.isArray(res.data) ? res.data : [];
+
+  const name = (f.name || "").toLowerCase();
+  const loadCsv = () => new Promise((resolve, reject) => {
+    Papa.parse(f, { header: true, skipEmptyLines: true, complete: resolve, error: reject });
+  });
+
+    (async () => {
+      let data = [];
+      if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+        const buf = await f.arrayBuffer();
+        const wb = XLSX.read(buf, { cellDates: true });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        data = XLSX.utils.sheet_to_json(ws, { defval: "" });
+        const hdrs = data.length ? Object.keys(data[0]) : [];
         setRows(data);
-        const hdrs = res.meta?.fields || Object.keys(data[0] || {});
+        setHeaders(hdrs);
+        setMap(guessMap(hdrs, kind));
+      } else {
+        const res = await loadCsv();
+        const rows = Array.isArray(res.data) ? res.data : [];
+        const hdrs = res.meta?.fields || Object.keys(rows[0] || {});
+        setRows(rows);
         setHeaders(hdrs);
         setMap(guessMap(hdrs, kind));
       }
-    });
+    })();
   }
 
-  const targetFields = kind === "devices" ? DEVICE_FIELDS : LEAD_FIELDS;
+function buildPayload() {
+  return rows.map(r => {
+    const o = {};
+    for (const [src, dst] of Object.entries(map)) {
+      if (!dst) continue;
+      let v = r[src];
 
-  function buildPayload() {
-    // premapiraj
-    const out = rows.map(r => {
-      const o = {};
-      for (const [src, dst] of Object.entries(map)) {
-        if (!dst) continue;
-        o[dst] = r[src] ?? null;
+        if (kind === "leads") {
+          if (dst === "serial") v = toSerialString(v);
+          else if (dst === "created_at" || dst === "handover_at") v = excelDateToISO(v);
+          else if (dst === "contacted") v = contactedToISO(v);
+          else if (dst === "days_left") v = (v === "" ? null : Number(v));
+        }
+        o[dst] = v ?? null;
       }
       return o;
     });
-    return out;
   }
 
   async function submit() {

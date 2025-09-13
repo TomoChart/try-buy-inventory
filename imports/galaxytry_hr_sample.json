@@ -2,7 +2,6 @@
   "rows": [
     {
       "submission_id": "SUB-90001",
-      "created_at": "2025-08-24T10:00:00Z",
       "first_name": "Ivan",
       "last_name": "Horvat",
       "email": "ivan@example.com",
@@ -11,6 +10,7 @@
       "city": "Zagreb",
       "postal_code": "10000",
       "pickup_city": "Zagreb",
+      "created_at": "2025-08-24T10:00:00Z",
       "contacted": "2025-08-24",
       "handover_at": "2025-08-25",
       "days_left": 14,
