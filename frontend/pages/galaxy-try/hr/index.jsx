@@ -600,7 +600,7 @@ function EditForm({ initial, onCancel, onSaved }) {
     // 👇 new
     created_at:     toDateOnly(initial.created_at),
     contacted:      toDateOnly(initial.contacted),
-    handover_at:    initial.handover_at  || "",
+    handover_at:    toDateOnly(initial.handover_at),
     model:          initial.model          || "",
     serial:         initial.serial         || "",
     note:           initial.note           || "",
@@ -628,6 +628,7 @@ function EditForm({ initial, onCancel, onSaved }) {
           // 👇 normalize created_at to ISO date only
           created_at: onlyDateISO(form.created_at),
           contacted: form.contacted ? new Date(form.contacted).toISOString() : null,
+          handover_at: onlyDateISO(form.handover_at),
         })
       });
       const data = await res.json().catch(()=> ({}));
@@ -743,7 +744,9 @@ function EditForm({ initial, onCancel, onSaved }) {
         },
         body: JSON.stringify({
           ...form,
+          created_at: onlyDateISO(form.created_at),
           contacted: form.contacted ? new Date(form.contacted).toISOString() : null,
+          handover_at: onlyDateISO(form.handover_at),
         })
       });
       const data = await res.json().catch(()=> ({}));
