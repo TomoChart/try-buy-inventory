@@ -1,39 +1,26 @@
 import { useEffect, useState, useRef } from "react";
 import withAuth from "../../../components/withAuth";
 import { API, getToken, handleUnauthorized } from "../../../lib/auth";
-import CsvImportModal from "../../../components/CsvImportModal";
 import { useRouter } from "next/router";
 import HomeButton from '../../../components/HomeButton';
 import * as XLSX from "xlsx";
 import Papa from "papaparse";
+import { fetchDevicesList } from "../../../src/lib/requests/devices";
 
 
 function GalaxyTryHRPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [showImport, setShowImport] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editing, setEditing] = useState(null);
   const router = useRouter();
   const [showAdd, setShowAdd] = useState(false);
-  const [adding, setAdding] = useState(false);
 
   const [selected, setSelected] = useState([]);
   const [columnFilters, setColumnFilters] = useState({});
   const [sort, setSort] = useState({ key: "", dir: "asc" });
   const [openMenu, setOpenMenu] = useState(null);
-
-  // koji red editiramo
-  const [editingId, setEditingId] = useState(null);
-  // lokalna polja za edit
-  const [fEmail, setFEmail] = useState("");
-  const [fPhone, setFPhone] = useState("");
-  const [fPickupCity, setFPickupCity] = useState("");
-  const [fModel, setFModel] = useState("");
-    const [fSerial, setFSerial] = useState("");
-    const [fContacted, setFContacted] = useState(false);
-    const [fHandover, setFHandover] = useState("");   // YYYY-MM-DD
 
   const fileRef = useRef(null);
 
@@ -41,46 +28,6 @@ function GalaxyTryHRPage() {
   function toDateOnly(v) {
     if (!v) return "";
     try { return new Date(v).toISOString().slice(0,10); } catch { return ""; }
-  }
-
-  function startEdit(r) {
-    setEditingId(r.submission_id);
-    setFEmail(r["Email"] || "");
-    setFPhone(r["Phone"] || "");
-    setFPickupCity(r["Pickup City"] || "");
-    setFModel(r["Model"] || "");
-      setFSerial(r["Serial"] || "");
-      setFContacted(!!(r["Contacted"] || r.contacted));
-      setFHandover(r["Handover At"] ? toDateOnly(r["Handover At"]) : "");
-  }
-
-  function cancelEdit() {
-    setEditingId(null);
-  }
-
-  async function saveEdit(id) {
-    const body = {
-      email: fEmail || null,
-      phone: fPhone || null,
-      pickup_city: fPickupCity || null,
-        contacted: fContacted ? new Date().toISOString() : null,
-      handover_at: fHandover ? new Date(fHandover).toISOString() : null,
-      model: fModel || null,
-      serial: fSerial || null,
-    };
-    const r = await fetch(`${API}/admin/galaxy-try/hr/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify(body),
-    });
-    const data = await r.json();
-    if (!r.ok) {
-      alert(data?.error || "Save failed");
-      return;
-    }
-    // reload liste
-    await load();
-    setEditingId(null);
   }
 
   function normalizeRow(r = {}) {
@@ -99,7 +46,7 @@ function GalaxyTryHRPage() {
       model:          r.model          ?? r["Model"]          ?? "",
       serial:        r.serial        ?? r["Serial"]        ?? "",
       note:           r.note           ?? r["Note"]           ?? "",
-      contacted: Boolean(contacted),
+      contacted: contacted || "",
     };
   }
   async function handleDelete(submissionId) {
@@ -121,31 +68,6 @@ function GalaxyTryHRPage() {
     } catch (err) {
       console.error('handleDelete error', err);
       alert('Greška pri brisanju.');
-    }
-  }
-
-  async function handleContactedChange(id, checked) {
-    try {
-      const res = await fetch(`${API}/admin/galaxy-try/hr/${encodeURIComponent(id)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
-        body: JSON.stringify({ contacted: checked ? new Date().toISOString() : null }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        alert(data?.error || "Update failed");
-        return;
-      }
-      setRows(prev =>
-        prev.map(r =>
-          r.submission_id === id
-            ? { ...r, contacted: checked }
-            : r
-        )
-      );
-    } catch (err) {
-      console.error('handleContactedChange error', err);
-      alert('Greška pri spremanju kontakta.');
     }
   }
 
@@ -173,7 +95,6 @@ function GalaxyTryHRPage() {
         if (!v) continue;
         const val =
           k === "daysLeft" ? String(daysLeft(r.handover_at)) :
-          k === "contacted" ? (r.contacted ? "Yes" : "No") :
           String(r[k] ?? "");
         if (!val.toLowerCase().includes(String(v).toLowerCase())) return false;
       }
@@ -186,9 +107,6 @@ function GalaxyTryHRPage() {
           if (sort.key === "daysLeft") {
             va = daysLeft(a.handover_at);
             vb = daysLeft(b.handover_at);
-          } else if (sort.key === "contacted") {
-            va = a.contacted ? 1 : 0;
-            vb = b.contacted ? 1 : 0;
           } else {
             va = a[sort.key];
             vb = b[sort.key];
@@ -243,7 +161,7 @@ function GalaxyTryHRPage() {
     { key: "city", label: "City" },
     { key: "pickup_city", label: "Pickup City" },
       { key: "created_at", label: "Created At" },
-      { key: "contacted", label: "Contacted Yes/No" },
+      { key: "contacted", label: "Contacted At" },
       { key: "handover_at", label: "Handover At" },
     { key: "daysLeft", label: "Days left" },
     { key: "model", label: "Model" },
@@ -361,33 +279,21 @@ function GalaxyTryHRPage() {
                   return (
                     <tr key={r.submission_id}>
                       <td className="p-2"><input type="checkbox" checked={selected.includes(r.submission_id)} onChange={() => toggleSelect(r.submission_id)} /></td>
-                      <td>{r.first_name ?? "-"}</td>
-                      <td>{r.last_name ?? "-"}</td>
-                      <td>{r.email ?? "-"}</td>
-                      <td>{r.phone ?? "-"}</td>
-                      <td>{r.address || "-"}</td>
-                      <td>{r.city || "-"}</td>
-                      <td>{r.pickup_city ?? "-"}</td>
-                      <td>{fmtDateDMY(r.created_at)}</td>
-                      <td className="text-center">
-                        <input
-                          type="checkbox"
-                          checked={r.contacted}
-                          onChange={e => handleContactedChange(r.submission_id, e.target.checked)}
-                        />
-                      </td>
-                      <td>{fmtDateDMY(r.handover_at)}</td>
-                      <td style={leftStyle}>{left === "" ? "" : left}</td>
-                      <td>{r.model ?? "-"}</td>
-                      <td>{r.serial ?? "-"}</td>
-                      <td>{r.note ?? "-"}</td>
+                      <td onClick={() => { setEditing(r); setShowEdit(true); }} className="cursor-pointer">{r.first_name ?? "-"}</td>
+                      <td onClick={() => { setEditing(r); setShowEdit(true); }} className="cursor-pointer">{r.last_name ?? "-"}</td>
+                      <td onClick={() => { setEditing(r); setShowEdit(true); }} className="cursor-pointer">{r.email ?? "-"}</td>
+                      <td onClick={() => { setEditing(r); setShowEdit(true); }} className="cursor-pointer">{r.phone ?? "-"}</td>
+                      <td onClick={() => { setEditing(r); setShowEdit(true); }} className="cursor-pointer">{r.address || "-"}</td>
+                      <td onClick={() => { setEditing(r); setShowEdit(true); }} className="cursor-pointer">{r.city || "-"}</td>
+                      <td onClick={() => { setEditing(r); setShowEdit(true); }} className="cursor-pointer">{r.pickup_city ?? "-"}</td>
+                      <td onClick={() => { setEditing(r); setShowEdit(true); }} className="cursor-pointer">{fmtDateDMY(r.created_at)}</td>
+                      <td onClick={() => { setEditing(r); setShowEdit(true); }} className="cursor-pointer">{fmtDateDMY(r.contacted)}</td>
+                      <td onClick={() => { setEditing(r); setShowEdit(true); }} className="cursor-pointer">{fmtDateDMY(r.handover_at)}</td>
+                      <td onClick={() => { setEditing(r); setShowEdit(true); }} className="cursor-pointer" style={leftStyle}>{left === "" ? "" : left}</td>
+                      <td onClick={() => { setEditing(r); setShowEdit(true); }} className="cursor-pointer">{r.model ?? "-"}</td>
+                      <td onClick={() => { setEditing(r); setShowEdit(true); }} className="cursor-pointer">{r.serial ?? "-"}</td>
+                      <td onClick={() => { setEditing(r); setShowEdit(true); }} className="cursor-pointer">{r.note ?? "-"}</td>
                       <td className="p-2 whitespace-nowrap">
-                        <button
-                          className="px-2 py-1 rounded bg-blue-600 text-white mr-2"
-                          onClick={() => { setEditing(r); setShowEdit(true); }}
-                        >
-                          Edit
-                        </button>
                         <button
                           className="px-2 py-1 rounded bg-red-600 text-white"
                           onClick={() => handleDelete(r.submission_id)}
@@ -440,15 +346,6 @@ function GalaxyTryHRPage() {
         </div>
       )}
 
-      {/*
-      {showImport && (
-        <CsvImportModal
-          onClose={() => { setShowImport(false); load(); }}
-          countryCode="HR"
-          kind="leads"
-        />
-      )}
-      */}
     </div>
   );
 }
@@ -694,13 +591,20 @@ function EditForm({ initial, onCancel, onSaved }) {
     pickup_city:    initial.pickup_city|| "",
     // 👇 new
     created_at:     toDateOnly(initial.created_at),
-    contacted:      !!initial.contacted,
+    contacted:      toDateOnly(initial.contacted),
     handover_at:    initial.handover_at  || "",
     model:          initial.model          || "",
     serial:         initial.serial         || "",
     note:           initial.note           || "",
   });
   const [saving, setSaving] = useState(false);
+  const [devices, setDevices] = useState([]);
+
+  useEffect(() => {
+    fetchDevicesList('hr').then(setDevices).catch(() => {});
+  }, []);
+
+  const serialOptions = devices.filter(d => d.Model === form.model).map(d => d.serial_number);
 
   async function save() {
     try {
@@ -715,7 +619,7 @@ function EditForm({ initial, onCancel, onSaved }) {
           ...form,
           // 👇 normalize created_at to ISO date only
           created_at: onlyDateISO(form.created_at),
-          contacted: form.contacted ? new Date().toISOString() : null,
+          contacted: form.contacted ? new Date(form.contacted).toISOString() : null,
         })
       });
       const data = await res.json().catch(()=> ({}));
@@ -760,10 +664,33 @@ function EditForm({ initial, onCancel, onSaved }) {
         <Field name="city"       label="City" />
         <Field name="pickup_city"    label="Pickup City" />
         <Field name="created_at"  label="Created At"  type="date" />
-        <Field name="contacted" label="Contacted Yes/No" type="checkbox" />
+        <Field name="contacted" label="Contacted At" type="date" />
         <Field name="handover_at"  label="Handover At"  type="date" />
-        <Field name="model"          label="Model" />
-        <Field name="serial"  label="Serial" />
+        <label className="text-sm">
+          <div className="mb-1">Model</div>
+          <select
+            className="border rounded px-2 py-1 w-full"
+            value={form.model}
+            onChange={e => setForm(s => ({ ...s, model: e.target.value, serial: "" }))}
+          >
+            <option value=""></option>
+            <option value="Fold7">Fold7</option>
+            <option value="Watch8">Watch8</option>
+          </select>
+        </label>
+        <label className="text-sm">
+          <div className="mb-1">Serial</div>
+          <select
+            className="border rounded px-2 py-1 w-full"
+            value={form.serial}
+            onChange={e => setForm(s => ({ ...s, serial: e.target.value }))}
+          >
+            <option value=""></option>
+            {serialOptions.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </label>
         <Field name="note"           label="Note" />
       </div>
       <div className="mt-4 flex justify-end gap-2">
@@ -784,11 +711,18 @@ function EditForm({ initial, onCancel, onSaved }) {
     const [form, setForm] = useState({
       first_name: "", last_name: "", email: "", phone: "",
       address: "", city: "", pickup_city: "",
-      contacted: false, handover_at: "",
+      contacted: "", handover_at: "",
       model: "", serial: "", note: "",
       created_at: ""
     });
     const [saving, setSaving] = useState(false);
+    const [devices, setDevices] = useState([]);
+
+    useEffect(() => {
+      fetchDevicesList('hr').then(setDevices).catch(() => {});
+    }, []);
+
+    const serialOptions = devices.filter(d => d.Model === form.model).map(d => d.serial_number);
 
   async function save() {
     try {
@@ -801,7 +735,7 @@ function EditForm({ initial, onCancel, onSaved }) {
         },
         body: JSON.stringify({
           ...form,
-          contacted: form.contacted ? new Date().toISOString() : null,
+          contacted: form.contacted ? new Date(form.contacted).toISOString() : null,
         })
       });
       const data = await res.json().catch(()=> ({}));
@@ -846,10 +780,33 @@ function EditForm({ initial, onCancel, onSaved }) {
         <Field name="city"       label="City" />
         <Field name="pickup_city"    label="Pickup City" />
         <Field name="created_at"  label="Created At"  type="date" />
-        <Field name="contacted" label="Contacted Yes/No" type="checkbox" />
+        <Field name="contacted" label="Contacted At" type="date" />
         <Field name="handover_at"  label="Handover At"  type="date" />
-        <Field name="model"          label="Model" />
-        <Field name="serial"  label="Serial" />
+        <label className="text-sm">
+          <div className="mb-1">Model</div>
+          <select
+            className="border rounded px-2 py-1 w-full"
+            value={form.model}
+            onChange={e => setForm(s => ({ ...s, model: e.target.value, serial: "" }))}
+          >
+            <option value=""></option>
+            <option value="Fold7">Fold7</option>
+            <option value="Watch8">Watch8</option>
+          </select>
+        </label>
+        <label className="text-sm">
+          <div className="mb-1">Serial</div>
+          <select
+            className="border rounded px-2 py-1 w-full"
+            value={form.serial}
+            onChange={e => setForm(s => ({ ...s, serial: e.target.value }))}
+          >
+            <option value=""></option>
+            {serialOptions.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </label>
         <Field name="note"           label="Note" />
       </div>
 
