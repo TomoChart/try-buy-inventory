@@ -16,6 +16,7 @@ import {
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import * as XLSX from "xlsx";
+import { API, getToken } from "../../../lib/auth";
 import { z } from "zod";
 import toast, { Toaster } from "react-hot-toast";
 
@@ -100,6 +101,94 @@ const calcDaysLeft = (handover: string | null, returned?: boolean) => {
   return String(left);
 };
 
+// === NOVI HELPER: normalizeBackendRow ===
+const normalizeBackendRow = (r: any): TryBuyRecord => {
+  const toYmd = (v: any): string | null => {
+    if (!v) return null;
+    const d = typeof v === "string" ? parseDateString(v) : new Date(v);
+    return d && !isNaN(d.getTime()) ? toDateString(d) : null;
+  };
+
+  return {
+    submission_id: r["Submission ID"] ?? r.submission_id ?? "",
+    first_name:    r["First Name"]    ?? r.first_name    ?? "",
+    last_name:     r["Last Name"]     ?? r.last_name     ?? "",
+    email:         r["Email"]         ?? r.email         ?? "",
+    phone:         r["Phone"]         ?? r.phone         ?? "",
+    address:       r["Address"]       ?? r.address       ?? "",
+    city:          r["City"]          ?? r.city          ?? "",
+    postal_code:   r["Postal Code"]   ?? r.postal_code   ?? "",
+    pickup_city:   r["Pickup City"]   ?? r.pickup_city   ?? "",
+    created_at:    toYmd(r["Created At"] ?? r.created_at ?? null),
+    contacted:     (r["Contacted At"] ?? r.contacted) ? "Yes" : "",
+    handover_at:   toYmd(r["Handover At"] ?? r.handover_at ?? null),
+    model:         r["Model"]         ?? r.model         ?? "",
+    serial:        r["Serial"]        ?? r.serial        ?? "",
+    note:          r["Note"]          ?? r.note          ?? "",
+    returned:      Boolean(r.returned),
+    feedback:      r.feedback ?? ""
+  };
+};
+
+// === NOVO: helper za mapiranje UI reda u import payload ===
+type ImportRow = {
+  submission_id?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  pickup_city?: string | null;
+  date_contacted?: string | null; // ISO ili null
+  date_handover?: string | null;  // ISO ili null
+  model?: string | null;
+  serial_number?: string | null;
+  note?: string | null;
+};
+
+const mapUiToImportRow = (r: TryBuyRecord): ImportRow => {
+  const d = (s: string | null) => {
+    if (!s) return null;
+    // UI koristi "YYYY-MM-DD"; backend smije primiti ISO @ 00:00Z
+    return `${s}T00:00:00.000Z`;
+  };
+  return {
+    submission_id: r.submission_id || null,
+    email: r.email || null,
+    phone: r.phone || null,
+    pickup_city: r.pickup_city || null,
+    date_contacted: r.contacted ? d(r.created_at ?? null) : null, // ako imaš zasebno polje za contacted date, mapiraj ga; ovo je fallback
+    date_handover: d(r.handover_at ?? null),
+    model: r.model || null,
+    serial_number: r.serial || null,
+    note: r.note || null,
+  };
+};
+
+// === NOVO: funkcija za import u backend ===
+async function importToBackend(country: string, rows: TryBuyRecord[]) {
+  const token = getToken();
+  if (!token) throw new Error("No token");
+
+  const payload = {
+    mode: "upsert",
+    rows: rows.map(mapUiToImportRow).filter(r => r.email || r.phone || r.serial_number),
+  };
+
+  const res = await fetch(`${API}/admin/galaxy-try/${String(country).toUpperCase()}/import?mode=upsert`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  let data: any = null;
+  try { data = await res.json(); } catch {}
+  if (!res.ok) {
+    throw new Error((data && (data.error || data.message)) || `Import failed (${res.status})`);
+  }
+  return data; // očekujemo { inserted, updated, skipped } ili slično
+}
+
 function TryAndBuyPage() {
   const router = useRouter();
   const { code } = router.query as { code?: string };
@@ -110,10 +199,23 @@ function TryAndBuyPage() {
 
   useEffect(() => {
     if (!country) return;
-    fetch(`/api/trybuy/${country}`)
-      .then((r) => r.json())
-      .then((d) => setData(d))
-      .catch(() => toast.error("Failed to load data"));
+    const load = async () => {
+      try {
+        const token = getToken();
+        if (!token) { toast.error("Session expired. Login again."); return; }
+        const code = String(country).toUpperCase(); // HR / SI / RS
+        const res = await fetch(`${API}/admin/galaxy-try/${code}/list`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const raw = await res.json();
+        const mapped: TryBuyRecord[] = Array.isArray(raw) ? raw.map(normalizeBackendRow) : [];
+        setData(mapped);
+      } catch (e) {
+        toast.error("Failed to load data");
+      }
+    };
+    load();
   }, [country]);
 
   const w30 = "w-[30ch]";
@@ -224,24 +326,25 @@ function TryAndBuyPage() {
     getPaginationRowModel: getPaginationRowModel(),
     initialState: { pagination: { pageSize: 50 } },
     meta: {
-      updateData: (rowIndex: number, columnId: string, value: any) => {
+      async updateData(rowIndex, columnId, value) {
+        // Optimistic update u UI
         setData((old) => {
-          const newData = [...old];
-          const row = { ...newData[rowIndex], [columnId]: value } as TryBuyRecord;
-          const validation = recordSchema.safeParse(row);
-          if (!validation.success) {
-            toast.error(validation.error.issues[0]?.message || "Validation error");
-            return old;
-          }
-          newData[rowIndex] = row;
-          const id = row.submission_id;
-          fetch(`/api/trybuy/${country}/${id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ [columnId]: value }),
-          }).catch(() => toast.error("Save failed"));
-          return newData;
+          const next = [...old];
+          next[rowIndex] = { ...next[rowIndex], [columnId]: value } as TryBuyRecord;
+          return next;
         });
+
+        try {
+          const rec = data[rowIndex];
+          const submissionId = rec?.submission_id || "";
+          if (!submissionId) throw new Error("Missing submission_id");
+
+          await patchTryBuyField(country, submissionId, columnId, value);
+          toast.success("Saved");
+        } catch (e: any) {
+          toast.error(e?.message || "Save failed");
+          // rollback nije nužan; po potrebi možemo refetchati cijeli popis
+        }
       },
     },
   });
@@ -554,6 +657,62 @@ function ColumnHeader({
       )}
     </div>
   );
+}
+
+const toIsoDateOnlyOrNull = (s: string | null) => {
+  if (!s) return null;
+  // očekujemo "YYYY-MM-DD"; pretvaramo u ISO na 00:00:00Z
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+  return `${s}T00:00:00.000Z`;
+};
+
+const toIsoOrNull = (s: string | null) => {
+  // koristi se za handover_at; ako dobije "YYYY-MM-DD" -> ISO @ 00:00:00Z
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return `${s}T00:00:00.000Z`;
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+};
+
+/** PATCH jedne izmjene na backend (partial payload) */
+async function patchTryBuyField(countryCode: string, submissionId: string, field: string, value: unknown) {
+  const token = getToken();
+  if (!token) throw new Error("No token");
+
+  // mapiranje polja iz tablice -> backend očekivanja
+  let payload: any = {};
+  if (field === "created_at") {
+    payload.created_at = toIsoDateOnlyOrNull((value as string) || null);
+  } else if (field === "handover_at") {
+    payload.handover_at = toIsoOrNull((value as string) || null);
+  } else if (field === "contacted") {
+    // u UI je "Yes" | "No" | ""; backend prima ISO ili null
+    const v = String(value || "");
+    if (v === "Yes") {
+      const today = new Date();
+      const y = today.getUTCFullYear();
+      const m = String(today.getUTCMonth() + 1).padStart(2, "0");
+      const d = String(today.getUTCDate()).padStart(2, "0");
+      payload.contacted = `${y}-${m}-${d}T00:00:00.000Z`;
+    } else {
+      payload.contacted = null;
+    }
+  } else {
+    // ostala polja šaljemo kako jesu (prazno -> null)
+    payload[field] = (value === "" ? null : value);
+  }
+
+  const res = await fetch(`${API}/admin/galaxy-try/${countryCode.toUpperCase()}/${encodeURIComponent(submissionId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
+
+  // backend vraća JSON ili error; 4xx/5xx bacamo s porukom
+  let data: any = null;
+  try { data = await res.json(); } catch {}
+  if (!res.ok) throw new Error((data && (data.error || data.message)) || "Save failed");
+  return data;
 }
 
 export default withAuth(TryAndBuyPage, { roles: ["country_admin", "superadmin"] });
