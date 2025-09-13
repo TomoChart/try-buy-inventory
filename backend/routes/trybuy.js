@@ -1,29 +1,58 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
+
 const router = express.Router();
 
-// In-memory stub storage
-let records = [];
+const DATA_FILE = path.join(__dirname, '../trybuy-data.json');
+let db = {};
+try {
+  db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+} catch {
+  db = {};
+}
+function save() {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(db, null, 2));
+}
 
-// GET /api/trybuy - return all records
-router.get('/', (_req, res) => {
-  res.json(records);
+router.get('/:country', (req, res) => {
+  const c = String(req.params.country || '').toLowerCase();
+  res.json(db[c] || []);
 });
 
-// PATCH /api/trybuy/:missionId - partial update
-router.patch('/:missionId', (req, res) => {
+router.post('/:country', (req, res) => {
+  const c = String(req.params.country || '').toLowerCase();
+  const arr = Array.isArray(req.body) ? req.body : [];
+  db[c] = db[c] || [];
+  const map = new Map(db[c].map((r) => [String(r.submission_id), r]));
+  arr.forEach((rec) => {
+    const id = String(rec.submission_id);
+    const existing = map.get(id);
+    map.set(id, existing ? { ...existing, ...rec } : rec);
+  });
+  db[c] = Array.from(map.values());
+  save();
+  res.json({ ok: true });
+});
+
+router.patch('/:country/:missionId', (req, res) => {
+  const c = String(req.params.country || '').toLowerCase();
   const id = String(req.params.missionId);
-  const idx = records.findIndex((r) => r.submission_id === id);
+  const arr = db[c] || [];
+  const idx = arr.findIndex((r) => String(r.submission_id) === id);
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
-  records[idx] = { ...records[idx], ...req.body };
-  res.json(records[idx]);
+  arr[idx] = { ...arr[idx], ...req.body };
+  db[c] = arr;
+  save();
+  res.json(arr[idx]);
 });
 
-// DELETE /api/trybuy - bulk delete by missionIds
-router.delete('/', (req, res) => {
+router.delete('/:country', (req, res) => {
+  const c = String(req.params.country || '').toLowerCase();
   const ids = Array.isArray(req.body?.missionIds) ? req.body.missionIds.map(String) : [];
-  records = records.filter((r) => !ids.includes(r.submission_id));
+  db[c] = (db[c] || []).filter((r) => !ids.includes(String(r.submission_id)));
+  save();
   res.json({ deleted: ids });
 });
 
 module.exports = router;
-
