@@ -35,6 +35,7 @@ function DetailPage() {
   const [note, setNote] = useState("");
 
   // date pickers
+  const [createdAt, setCreatedAt] = useState(null);
   const [contactedAt, setContactedAt] = useState(null);
   const [handoverAt, setHandoverAt] = useState(null);
 
@@ -57,6 +58,7 @@ function DetailPage() {
         setSerial(data["IMEI"] ?? "");
         setNote(data["Bilješka"] ?? "");
 
+        setCreatedAt(toDateOrNull(data["Datum prijave"] || data["Created At"]));
         setContactedAt(toDateOrNull(data["Kontaktiran"]));
         setHandoverAt(toDateOrNull(data["Predaja uređaja"]));
       } catch (e) {
@@ -115,7 +117,7 @@ function DetailPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm mb-4">
             <Field k="Submission ID" v={row["Submission ID"] || id} />
             {/* Created At samo datum */}
-            <Field k="Created At" v={toDateOnly(row["Datum prijave"] || row["Created At"])} />
+            <Field k="Created At" v={toDateOnly(createdAt)} />
             <Field k="Country" v={row["Zemlja"] || "HR"} />
           </div>
 

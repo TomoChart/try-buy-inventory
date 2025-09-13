@@ -13,8 +13,6 @@ function GalaxyTryHRPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [showImport, setShowImport] = useState(false);
-  const [showEdit, setShowEdit] = useState(false);
-  const [editing, setEditing] = useState(null);
   const router = useRouter();
   const [showAdd, setShowAdd] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -24,17 +22,6 @@ function GalaxyTryHRPage() {
   const [sort, setSort] = useState({ key: "", dir: "asc" });
   const [openMenu, setOpenMenu] = useState(null);
 
-  // koji red editiramo
-  const [editingId, setEditingId] = useState(null);
-  // lokalna polja za edit
-  const [fEmail, setFEmail] = useState("");
-  const [fPhone, setFPhone] = useState("");
-  const [fPickupCity, setFPickupCity] = useState("");
-  const [fModel, setFModel] = useState("");
-    const [fSerial, setFSerial] = useState("");
-    const [fContacted, setFContacted] = useState(false);
-    const [fHandover, setFHandover] = useState("");   // YYYY-MM-DD
-
   const fileRef = useRef(null);
 
   // pomoćne
@@ -43,63 +30,23 @@ function GalaxyTryHRPage() {
     try { return new Date(v).toISOString().slice(0,10); } catch { return ""; }
   }
 
-  function startEdit(r) {
-    setEditingId(r.submission_id);
-    setFEmail(r["Email"] || "");
-    setFPhone(r["Phone"] || "");
-    setFPickupCity(r["Pickup City"] || "");
-    setFModel(r["Model"] || "");
-      setFSerial(r["IMEI"] || "");
-      setFContacted(!!(r["Contacted"] || r.contacted));
-      setFHandover(r["Handover At"] ? toDateOnly(r["Handover At"]) : "");
-  }
-
-  function cancelEdit() {
-    setEditingId(null);
-  }
-
-  async function saveEdit(id) {
-    const body = {
-      email: fEmail || null,
-      phone: fPhone || null,
-      pickup_city: fPickupCity || null,
-        contacted: fContacted ? new Date().toISOString() : null,
-      handover_at: fHandover ? new Date(fHandover).toISOString() : null,
-      model: fModel || null,
-      imei: fSerial || null,
-    };
-    const r = await fetch(`${API}/admin/galaxy-try/hr/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
-      body: JSON.stringify(body),
-    });
-    const data = await r.json();
-    if (!r.ok) {
-      alert(data?.error || "Save failed");
-      return;
-    }
-    // reload liste
-    await load();
-    setEditingId(null);
-  }
-
   function normalizeRow(r = {}) {
-    const contacted = r.contacted ?? r["Contacted"] ?? r["Contacted At"];
     return {
       submission_id: r.submission_id ?? r["Submission ID"] ?? "",
-      first_name:     r.first_name     ?? r["First Name"]     ?? "",
-      last_name:      r.last_name      ?? r["Last Name"]      ?? "",
-      email:          r.email          ?? r["Email"]          ?? "",
-      phone:          r.phone          ?? r["Phone"]          ?? "",
-      address:        r.address        ?? r["Address"]        ?? "",
-      city:           r.city           ?? r["City"]           ?? "",
-      pickup_city:    r.pickup_city    ?? r["Pickup City"]    ?? "",
-      created_at:     r.created_at     ?? r["Created At"]     ?? "",
-      handover_at:  r.handover_at  ?? r["Handover At"]    ?? "",
-      model:          r.model          ?? r["Model"]          ?? "",
-      imei:  r.imei  ?? r["IMEI"]  ?? "",
-      note:           r.note           ?? r["Note"]           ?? "",
-      contacted: Boolean(contacted),
+      first_name: r.first_name ?? r["First Name"] ?? "",
+      last_name: r.last_name ?? r["Last Name"] ?? "",
+      email: r.email ?? r["Email"] ?? "",
+      phone: r.phone ?? r["Phone"] ?? "",
+      address: r.address ?? r["Address"] ?? "",
+      city: r.city ?? r["City"] ?? "",
+      pickup_city: r.pickup_city ?? r["Pickup City"] ?? "",
+      created_at: r.created_at ?? r["Created At"] ?? "",
+      contacted: r.contacted ?? r["Contacted"] ?? r["Contacted At"] ?? "",
+      handover_at: r.handover_at ?? r["Handover At"] ?? "",
+      days_left: r.days_left ?? r["Days Left"] ?? "",
+      model: r.model ?? r["Model"] ?? "",
+      imei: r.imei ?? r["IMEI"] ?? "",
+      note: r.note ?? r["Note"] ?? "",
     };
   }
   async function handleDelete(submissionId) {
@@ -123,32 +70,6 @@ function GalaxyTryHRPage() {
       alert('Greška pri brisanju.');
     }
   }
-
-  async function handleContactedChange(id, checked) {
-    try {
-      const res = await fetch(`${API}/admin/galaxy-try/hr/${encodeURIComponent(id)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
-        body: JSON.stringify({ contacted: checked ? new Date().toISOString() : null }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        alert(data?.error || "Update failed");
-        return;
-      }
-      setRows(prev =>
-        prev.map(r =>
-          r.submission_id === id
-            ? { ...r, contacted: checked }
-            : r
-        )
-      );
-    } catch (err) {
-      console.error('handleContactedChange error', err);
-      alert('Greška pri spremanju kontakta.');
-    }
-  }
-
   async function load() {
     try {
       setLoading(true);
@@ -168,43 +89,100 @@ function GalaxyTryHRPage() {
 
   useEffect(() => { load(); }, []);
 
-    const filtered = rows.filter(r => {
-      for (const [k, v] of Object.entries(columnFilters)) {
-        if (!v) continue;
-        const val =
-          k === "daysLeft" ? String(daysLeft(r.handover_at)) :
-          k === "contacted" ? (r.contacted ? "Yes" : "No") :
-          String(r[k] ?? "");
-        if (!val.toLowerCase().includes(String(v).toLowerCase())) return false;
-      }
-      return true;
+  async function updateCell(id, field, value) {
+    try {
+      const body = { [field]: value };
+      const res = await fetch(`${API}/admin/galaxy-try/hr/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Update failed");
+      setRows(prev => prev.map(r => r.submission_id === id ? { ...r, [field]: value } : r));
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  function EditableCell({ row, field, type = "text", editable = true }) {
+    const [editing, setEditing] = useState(false);
+    const [val, setVal] = useState(() => {
+      if (type === "date") return toDateOnly(row[field]);
+      return row[field] ?? "";
     });
 
-    const sorted = sort.key
-      ? [...filtered].sort((a, b) => {
-          let va, vb;
-          if (sort.key === "daysLeft") {
-            va = daysLeft(a.handover_at);
-            vb = daysLeft(b.handover_at);
-          } else if (sort.key === "contacted") {
-            va = a.contacted ? 1 : 0;
-            vb = b.contacted ? 1 : 0;
-          } else {
-            va = a[sort.key];
-            vb = b[sort.key];
-          }
-          const numA = Number(va);
-          const numB = Number(vb);
-          if (!isNaN(numA) && !isNaN(numB)) {
-            return sort.dir === "asc" ? numA - numB : numB - numA;
-          }
-          va = (va ?? "").toString().toLowerCase();
-          vb = (vb ?? "").toString().toLowerCase();
-          if (va < vb) return sort.dir === "asc" ? -1 : 1;
-          if (va > vb) return sort.dir === "asc" ? 1 : -1;
-          return 0;
-        })
-      : filtered;
+    useEffect(() => {
+      setVal(type === "date" ? toDateOnly(row[field]) : (row[field] ?? ""));
+    }, [row[field]]);
+
+    const onSave = async () => {
+      setEditing(false);
+      let newVal = val;
+      if (type === "date") newVal = val ? new Date(val).toISOString() : null;
+      if (type === "number") newVal = val === "" ? null : Number(val);
+      await updateCell(row.submission_id, field, newVal);
+    };
+
+    if (!editable) {
+      const display = type === "date" ? fmtDateDMY(row[field]) : (row[field] ?? "-");
+      return <div className="min-w-[60px]">{display}</div>;
+    }
+
+    if (editing) {
+      return (
+        <input
+          type={type === "date" ? "date" : type === "number" ? "number" : "text"}
+          value={val ?? ""}
+          onChange={e => setVal(e.target.value)}
+          onBlur={onSave}
+          onKeyDown={e => { if (e.key === "Enter") onSave(); }}
+          className="border rounded px-1 w-full"
+          autoFocus
+        />
+      );
+    }
+    const display = type === "date" ? fmtDateDMY(row[field]) : (row[field] ?? "-");
+    return <div onClick={() => setEditing(true)} className="min-w-[60px] cursor-pointer">{display}</div>;
+  }
+
+  const filtered = rows.filter(r => {
+    for (const [k, v] of Object.entries(columnFilters)) {
+      if (!v) continue;
+      let val;
+      if (["created_at", "handover_at", "contacted"].includes(k)) {
+        val = toDateOnly(r[k]);
+      } else if (k === "days_left") {
+        val = String(r.days_left ?? "");
+      } else {
+        val = String(r[k] ?? "");
+      }
+      if (!val.toLowerCase().includes(String(v).toLowerCase())) return false;
+    }
+    return true;
+  });
+
+  const sorted = sort.key
+    ? [...filtered].sort((a, b) => {
+        let va = a[sort.key];
+        let vb = b[sort.key];
+        if (["created_at", "handover_at", "contacted"].includes(sort.key)) {
+          va = va ? new Date(va).getTime() : 0;
+          vb = vb ? new Date(vb).getTime() : 0;
+        } else if (sort.key === "days_left") {
+          va = Number(va);
+          vb = Number(vb);
+        }
+        if (typeof va === "number" && typeof vb === "number" && !isNaN(va) && !isNaN(vb)) {
+          return sort.dir === "asc" ? va - vb : vb - va;
+        }
+        va = (va ?? "").toString().toLowerCase();
+        vb = (vb ?? "").toString().toLowerCase();
+        if (va < vb) return sort.dir === "asc" ? -1 : 1;
+        if (va > vb) return sort.dir === "asc" ? 1 : -1;
+        return 0;
+      })
+    : filtered;
 
   const allSelected = sorted.length > 0 && sorted.every(r => selected.includes(r.submission_id));
 
@@ -235,20 +213,20 @@ function GalaxyTryHRPage() {
   }
 
   const columns = [
-    { key: "first_name", label: "First Name" },
-    { key: "last_name", label: "Last Name" },
-    { key: "email", label: "Email" },
-    { key: "phone", label: "Phone" },
-    { key: "address", label: "Address" },
-    { key: "city", label: "City" },
-    { key: "pickup_city", label: "Pickup City" },
-      { key: "created_at", label: "Created At" },
-      { key: "contacted", label: "Contacted Yes/No" },
-      { key: "handover_at", label: "Handover At" },
-    { key: "daysLeft", label: "Days left" },
-    { key: "model", label: "Model" },
-    { key: "imei", label: "IMEI" },
-    { key: "note", label: "Note" },
+    { key: "first_name", label: "First Name", type: "text" },
+    { key: "last_name", label: "Last Name", type: "text" },
+    { key: "email", label: "Email", type: "text" },
+    { key: "phone", label: "Phone", type: "text" },
+    { key: "address", label: "Address", type: "text" },
+    { key: "city", label: "City", type: "text" },
+    { key: "pickup_city", label: "Pickup City", type: "text" },
+    { key: "created_at", label: "Created At", type: "date", editable: false },
+    { key: "contacted", label: "Contacted At", type: "date" },
+    { key: "handover_at", label: "Handover At", type: "date" },
+    { key: "days_left", label: "Days Left", type: "number" },
+    { key: "model", label: "Model", type: "text" },
+    { key: "imei", label: "IMEI", type: "text" },
+    { key: "note", label: "Note", type: "text" },
   ];
 
   return (
@@ -355,68 +333,28 @@ function GalaxyTryHRPage() {
                 </tr>
               </thead>
               <tbody>
-                {sorted.map(r => {
-                  const left = daysLeft(r.handover_at);
-                  const leftStyle = (left === 0) ? { backgroundColor: "#fee2e2", color: "#991b1b", fontWeight: 600 } : {};
-                  return (
-                    <tr key={r.submission_id}>
-                      <td className="p-2"><input type="checkbox" checked={selected.includes(r.submission_id)} onChange={() => toggleSelect(r.submission_id)} /></td>
-                      <td>{r.first_name ?? "-"}</td>
-                      <td>{r.last_name ?? "-"}</td>
-                      <td>{r.email ?? "-"}</td>
-                      <td>{r.phone ?? "-"}</td>
-                      <td>{r.address || "-"}</td>
-                      <td>{r.city || "-"}</td>
-                      <td>{r.pickup_city ?? "-"}</td>
-                      <td>{fmtDateDMY(r.created_at)}</td>
-                      <td className="text-center">
-                        <input
-                          type="checkbox"
-                          checked={r.contacted}
-                          onChange={e => handleContactedChange(r.submission_id, e.target.checked)}
-                        />
+                {sorted.map(r => (
+                  <tr key={r.submission_id}>
+                    <td className="p-2"><input type="checkbox" checked={selected.includes(r.submission_id)} onChange={() => toggleSelect(r.submission_id)} /></td>
+                    {columns.map(c => (
+                      <td key={c.key} className="p-2">
+                        <EditableCell row={r} field={c.key} type={c.type} editable={c.editable !== false} />
                       </td>
-                      <td>{fmtDateDMY(r.handover_at)}</td>
-                      <td style={leftStyle}>{left === "" ? "" : left}</td>
-                      <td>{r.model ?? "-"}</td>
-                      <td>{r.imei ?? "-"}</td>
-                      <td>{r.note ?? "-"}</td>
-                      <td className="p-2 whitespace-nowrap">
-                        <button
-                          className="px-2 py-1 rounded bg-blue-600 text-white mr-2"
-                          onClick={() => { setEditing(r); setShowEdit(true); }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className="px-2 py-1 rounded bg-red-600 text-white"
-                          onClick={() => handleDelete(r.submission_id)}
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                    ))}
+                    <td className="p-2 whitespace-nowrap">
+                      <button
+                        className="px-2 py-1 rounded bg-red-600 text-white"
+                        onClick={() => handleDelete(r.submission_id)}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </>
-      )}
-
-      {showEdit && editing && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded shadow p-4 w-[720px] max-w-[95vw]">
-            <h3 className="font-semibold text-lg mb-3">
-              Edit — {editing.submission_id}
-            </h3>
-            <EditForm
-              initial={editing}
-              onCancel={() => { setShowEdit(false); setEditing(null); }}
-              onSaved={async () => { setShowEdit(false); setEditing(null); await load(); }}
-            />
-          </div>
-        </div>
       )}
 
       <div className="mb-3 flex items-center gap-2">
@@ -465,18 +403,6 @@ function fmtDateDMY(value) {
 }
 
 // 14-dnevni countdown od handover_at
-function daysLeft(handover_at) {
-  if (!handover_at) return "";
-  const start = new Date(handover_at);
-  if (isNaN(start)) return "";
-  const today = new Date();
-  // normaliziraj na 00:00
-  start.setHours(0,0,0,0);
-  today.setHours(0,0,0,0);
-  const diffDays = Math.round((today - start) / (1000*60*60*24));
-  return 14 - diffDays; // ako je danas = handover → 14
-}
-
 // --- CSV/XLSX import (auto) ---
 const LEAD_FIELDS = [
   "submission_id","created_at","first_name","last_name","email","phone",
@@ -598,103 +524,11 @@ async function handleImportGalaxyCsv(e) {
   }
 }
 
-function EditForm({ initial, onCancel, onSaved }) {
-    const [form, setForm] = useState({
-      first_name:     initial.first_name || "",
-      last_name:      initial.last_name  || "",
-      email:          initial.email      || "",
-      phone:          initial.phone      || "",
-      address:        initial.address    || "",
-      city:           initial.city       || "",
-      pickup_city:    initial.pickup_city|| "",
-      contacted:      !!initial.contacted,
-      handover_at:  initial.handover_at  || "",
-      model:          initial.model          || "",
-      imei:  initial.imei  || "",
-      note:           initial.note           || "",
-    });
-  const [saving, setSaving] = useState(false);
-
-  async function save() {
-    try {
-      setSaving(true);
-      const res = await fetch(`${API}/admin/galaxy-try/hr/${encodeURIComponent(initial.submission_id)}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${getToken()}`
-        },
-        body: JSON.stringify({
-          ...form,
-          contacted: form.contacted ? new Date().toISOString() : null,
-        })
-      });
-      const data = await res.json().catch(()=> ({}));
-      if (!res.ok) throw new Error(data?.error || "Save failed");
-      await onSaved();
-    } catch (e) {
-      alert(e.message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const Field = ({name,label,type="text"}) => (
-    <label className="text-sm">
-      <div className="mb-1">{label}</div>
-      {type === "checkbox" ? (
-        <input
-          type="checkbox"
-          className="border rounded px-2 py-1"
-          checked={form[name] ?? false}
-          onChange={e => setForm(s => ({...s, [name]: e.target.checked}))}
-        />
-      ) : (
-        <input
-          type={type}
-          className="border rounded px-2 py-1 w-full"
-          value={form[name] ?? ""}
-          onChange={e => setForm(s => ({...s, [name]: e.target.value}))}
-        />
-      )}
-    </label>
-  );
-
-  return (
-    <div>
-      <div className="grid grid-cols-2 gap-3">
-        <Field name="first_name" label="First Name" />
-        <Field name="last_name"  label="Last Name" />
-        <Field name="email"      label="Email" />
-        <Field name="phone"      label="Phone" />
-        <Field name="address"    label="Address" />
-        <Field name="city"       label="City" />
-        <Field name="pickup_city"    label="Pickup City" />
-        <Field name="contacted" label="Contacted Yes/No" type="checkbox" />
-        <Field name="handover_at"  label="Handover At"  type="date" />
-        <Field name="model"          label="Model" />
-        <Field name="imei"  label="IMEI" />
-        <Field name="note"           label="Note" />
-      </div>
-      <div className="mt-4 flex justify-end gap-2">
-        <button className="px-3 py-1 border rounded" onClick={onCancel}>Cancel</button>
-        <button
-          className="px-3 py-1 rounded bg-blue-600 text-white disabled:opacity-50"
-          onClick={save}
-          disabled={saving}
-        >
-          {saving ? "Saving…" : "Save"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
   function AddForm({ onCancel, onSaved }) {
     const [form, setForm] = useState({
       first_name: "", last_name: "", email: "", phone: "",
       address: "", city: "", pickup_city: "",
-      contacted: false, handover_at: "",
+      contacted: "", handover_at: "",
       model: "", imei: "", note: ""
     });
     const [saving, setSaving] = useState(false);
@@ -710,7 +544,8 @@ function EditForm({ initial, onCancel, onSaved }) {
         },
         body: JSON.stringify({
           ...form,
-          contacted: form.contacted ? new Date().toISOString() : null,
+          contacted: form.contacted ? new Date(form.contacted).toISOString() : null,
+          handover_at: form.handover_at ? new Date(form.handover_at).toISOString() : null,
         })
       });
       const data = await res.json().catch(()=> ({}));
@@ -754,7 +589,7 @@ function EditForm({ initial, onCancel, onSaved }) {
         <Field name="address"    label="Address" />
         <Field name="city"       label="City" />
         <Field name="pickup_city"    label="Pickup City" />
-        <Field name="contacted" label="Contacted Yes/No" type="checkbox" />
+        <Field name="contacted" label="Contacted At" type="date" />
         <Field name="handover_at"  label="Handover At"  type="date" />
         <Field name="model"          label="Model" />
         <Field name="imei"  label="IMEI" />
