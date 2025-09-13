@@ -891,3 +891,49 @@ app.get('/admin/galaxy-try/:code/list',
     }
   }
 );
+
+// === TRY-AND-BUY: LIST po country code (HR/SI/RS)
+app.get('/admin/try-and-buy/:code/list',
+  requireAuth, requireRole('country_admin','superadmin'),
+  async (req, res) => {
+    try {
+      const code = String(req.params.code || '').toUpperCase();
+      if (!['HR','SI','RS'].includes(code)) {
+        return res.status(400).json({ error: 'Unknown country code' });
+      }
+
+      // Vraćamo snake_case ključeve koje frontend očekuje,
+      // a "contacted" je "Yes" ako postoji date_contacted, inače "".
+      const sql = `
+        SELECT
+          submission_id                         AS submission_id,
+          first_name                            AS first_name,
+          last_name                             AS last_name,
+          email                                 AS email,
+          phone                                 AS phone,
+          address                               AS address,
+          city                                  AS city,
+          postal_code                           AS postal_code,
+          pickup_city                           AS pickup_city,
+          to_char(CAST(created_at AS date), 'YYYY-MM-DD')   AS created_at,
+          CASE WHEN date_contacted IS NOT NULL THEN 'Yes' ELSE '' END
+                                               AS contacted,
+          to_char(CAST(date_handover AS date), 'YYYY-MM-DD')
+                                               AS handover_at,
+          model                                 AS model,
+          serial                                AS serial,
+          note                                  AS note,
+          returned                              AS returned,
+          feedback                              AS feedback
+        FROM leads_import
+        WHERE country_code = $1
+        ORDER BY created_at DESC NULLS LAST, submission_id DESC
+      `;
+      const rows = await prisma.$queryRawUnsafe(sql, code);
+      return res.json(rows || []);
+    } catch (err) {
+      console.error('GET /admin/try-and-buy/:code/list error', err);
+      return res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
