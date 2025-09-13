@@ -6,6 +6,14 @@ import { useRouter } from "next/router";
 import HomeButton from '../../../components/HomeButton';
 import { fetchDevicesList } from "../../../src/lib/requests/devices";
 
+function toDateOnly(v) {
+  if (!v) return "";
+  try {
+    return new Date(v).toISOString().slice(0, 10);
+  } catch {
+    return "";
+  }
+}
 
 function GalaxyTryHRPage() {
   const [rows, setRows] = useState([]);
@@ -21,12 +29,6 @@ function GalaxyTryHRPage() {
   const [columnFilters, setColumnFilters] = useState({});
   const [sort, setSort] = useState({ key: "", dir: "asc" });
   const [openMenu, setOpenMenu] = useState(null);
-
-  // pomoćne
-  function toDateOnly(v) {
-    if (!v) return "";
-    try { return new Date(v).toISOString().slice(0,10); } catch { return ""; }
-  }
 
   function normalizeRow(r = {}) {
     const contacted = r.contacted ?? r["Contacted"] ?? r["Contacted At"];
