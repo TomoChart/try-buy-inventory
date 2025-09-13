@@ -73,7 +73,7 @@ function DevicesPage() {
     }
     load();
     return () => { cancelled = true; };
-  }, [router.query.country]);
+  }, [router, router.query.country]);
 
   async function toggleExpand(serial) {
     if (expanded === serial) { setExpanded(null); setDetail(null); return; }

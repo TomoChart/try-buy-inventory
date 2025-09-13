@@ -21,15 +21,14 @@ export default function AppLayout({ children }) {
   const router = useRouter();
   const user = getCurrentUser();
   const token = getToken();
+  const p = router.asPath;
+  const activeCode = useActiveCountryCode();
+  const withCode = (slug) => (activeCode ? `/c/${activeCode}${slug}` : slug);
 
   if (typeof window !== "undefined" && !user && router.pathname !== "/login") {
     router.replace("/login");
     return null;
   }
-
-  const p = router.asPath;
-  const activeCode = useActiveCountryCode();
-  const withCode = (slug) => (activeCode ? `/c/${activeCode}${slug}` : slug);
 
   // PRIMJER niza linkova:
   const nav = [
