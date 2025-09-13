@@ -36,6 +36,7 @@ function GalaxyTryHRPage() {
     const [fHandover, setFHandover] = useState("");   // YYYY-MM-DD
 
   const fileRef = useRef(null);
+  const xlsxRef = useRef(null);
 
   // pomoćne
   function toDateOnly(v) {
@@ -234,6 +235,23 @@ function GalaxyTryHRPage() {
     setSelected([]);
   }
 
+  function downloadTemplate() {
+    const headers = [
+      "submission_id",
+      "created_at",
+      "handover_at",
+      "imei",
+      "contacted",
+      ...LEAD_FIELDS.filter(f =>
+        !["submission_id", "created_at", "handover_at", "imei", "contacted"].includes(f)
+      ),
+    ];
+    const ws = XLSX.utils.aoa_to_sheet([headers]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Template");
+    XLSX.writeFile(wb, "galaxy_try_hr_template.xlsx");
+  }
+
   const columns = [
     { key: "first_name", label: "First Name" },
     { key: "last_name", label: "Last Name" },
@@ -266,8 +284,14 @@ function GalaxyTryHRPage() {
 
         <h1 className="text-xl font-bold">Galaxy Try — HR</h1>
 
-        {/* Gumb koji otvara hidden file input */}
-        <div>
+        {/* Gumbovi za preuzimanje templatea i import */}
+        <div className="flex gap-2">
+          <button
+            className="px-3 py-2 border rounded hover:bg-gray-50"
+            onClick={downloadTemplate}
+          >
+            Download template
+          </button>
           <input
             ref={fileRef}
             type="file"
@@ -283,6 +307,22 @@ function GalaxyTryHRPage() {
             onClick={() => fileRef.current?.click()}
           >
             Import CSV
+          </button>
+          <input
+            ref={xlsxRef}
+            type="file"
+            accept="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+            className="hidden"
+            onChange={async (e) => {
+              await handleImportGalaxyCsv(e);
+              await load();
+            }}
+          />
+          <button
+            className="px-3 py-2 bg-green-600 text-white rounded"
+            onClick={() => xlsxRef.current?.click()}
+          >
+            Upload XLSX
           </button>
         </div>
       </div>
