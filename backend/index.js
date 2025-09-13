@@ -356,7 +356,7 @@ app.patch(
           note = COALESCE($11, note)
         WHERE submission_id = $12 AND country_code = $13
         RETURNING
-          submission_id, email, phone, address, city, pickup_city, contacted, handover_at, days_left, model, imei, note
+          submission_id, email, phone, address, city, pickup_city, created_at, contacted, handover_at, days_left, model, imei, note
       `;
 
       const vals = [
