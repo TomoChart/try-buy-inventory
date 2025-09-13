@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import withAuth from "../../../components/withAuth";
 import HomeButton from "../../../components/HomeButton";
@@ -11,6 +11,7 @@ import {
   useReactTable,
   ColumnDef,
   RowData,
+  Column,
 } from "@tanstack/react-table";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -21,6 +22,9 @@ import toast, { Toaster } from "react-hot-toast";
 declare module "@tanstack/react-table" {
   interface TableMeta<TData extends RowData> {
     updateData: (rowIndex: number, columnId: string, value: unknown) => void;
+  }
+  interface ColumnMeta<TData extends RowData, TValue> {
+    className?: string;
   }
 }
 
@@ -111,42 +115,71 @@ function TryAndBuyPage() {
       .catch(() => toast.error("Failed to load data"));
   }, [country]);
 
+  const wDate = "w-28";
+  const wBase = "w-40";
+  const wWide = "w-80";
+
+  const col = (
+    key: keyof TryBuyRecord,
+    width: string,
+    cell?: any,
+    title?: string
+  ): ColumnDef<TryBuyRecord> => ({
+    accessorKey: key,
+    header: ({ column }) => (
+      <ColumnHeader column={column} title={title || key} />
+    ),
+    cell: cell ?? EditableCell,
+    meta: { className: width },
+  });
+
   const columns = useMemo<ColumnDef<TryBuyRecord>[]>(
     () => [
-      { accessorKey: "first_name", header: "first_name", cell: EditableCell },
-      { accessorKey: "last_name", header: "last_name", cell: EditableCell },
-      { accessorKey: "email", header: "email", cell: EditableCell },
-      { accessorKey: "phone", header: "phone", cell: EditableCell },
-      { accessorKey: "address", header: "address", cell: EditableCell },
-      { accessorKey: "city", header: "city", cell: EditableCell },
-      { accessorKey: "postal_code", header: "postal_code", cell: EditableCell },
-      { accessorKey: "pickup_city", header: "pickup_city", cell: EditableCell },
-      { accessorKey: "created_at", header: "created_at", cell: DateCell },
-      { accessorKey: "contacted", header: "contacted", cell: SelectCell(["", "Yes", "No"]) },
-      { accessorKey: "handover_at", header: "handover_at", cell: DateCell },
+      col("first_name", wBase),
+      col("last_name", wWide),
+      col("email", wWide),
+      col("phone", wBase),
+      col("address", wWide),
+      col("city", wWide),
+      col("postal_code", wBase),
+      col("pickup_city", wBase),
+      col("created_at", wDate, DateCell),
+      col("contacted", wBase, SelectCell(["", "Yes", "No"])),
+      col("handover_at", wDate, DateCell),
       {
         id: "days_left",
-        header: "days_left",
-        cell: ({ row }) => calcDaysLeft(row.original.handover_at, row.original.returned),
+        header: ({ column }) => <ColumnHeader column={column} title="days_left" />,
+        cell: ({ row }) =>
+          calcDaysLeft(row.original.handover_at, row.original.returned),
+        meta: { className: "w-24" },
       },
-      { accessorKey: "model", header: "model", cell: SelectCell(["", "Fold7", "Watch8"]) },
-      { accessorKey: "serial", header: "serial", cell: EditableCell },
-      { accessorKey: "note", header: "note", cell: EditableCell },
+      col("model", wBase, SelectCell(["", "Fold7", "Watch8"])),
+      col("serial", wWide),
+      col("note", wBase),
       {
         accessorKey: "returned",
-        header: "returned",
+        header: ({ column }) => (
+          <ColumnHeader column={column} title="returned" />
+        ),
         cell: ({ getValue, row, column, table }) => {
           const v = getValue() as boolean | undefined;
           return (
             <input
               type="checkbox"
               checked={!!v}
-              onChange={(e) => table.options.meta?.updateData(row.index, column.id, e.target.checked)}
+              onChange={(e) =>
+                table.options.meta?.updateData(
+                  row.index,
+                  column.id,
+                  e.target.checked
+                )
+              }
             />
           );
         },
+        meta: { className: "w-24" },
       },
-      { accessorKey: "feedback", header: "user_feedback", cell: EditableCell },
+      col("feedback", wWide, EditableCell, "user_feedback"),
     ],
     []
   );
@@ -252,16 +285,24 @@ function TryAndBuyPage() {
           skip duplicates
         </label>
       </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm whitespace-nowrap">
+      <div className="overflow-x-auto bg-gray-200/50 text-black">
+        <table className="min-w-full text-sm">
           <thead>
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
                 {hg.headers.map((header) => (
-                  <th key={header.id} className="p-2 border-b text-left">
+                  <th
+                    key={header.id}
+                    className={`p-2 border-b text-left ${
+                      header.column.columnDef.meta?.className || ""
+                    }`}
+                  >
                     {header.isPlaceholder
                       ? null
-                      : flexRender(header.column.columnDef.header, header.getContext())}
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
                   </th>
                 ))}
               </tr>
@@ -269,16 +310,27 @@ function TryAndBuyPage() {
           </thead>
           <tbody>
             {table.getRowModel().rows.map((row) => {
-              const left = Number(calcDaysLeft(row.original.handover_at, row.original.returned));
+              const left = Number(
+                calcDaysLeft(row.original.handover_at, row.original.returned)
+              );
               let rowClass = "";
               if (row.original.returned) rowClass = "bg-blue-200";
               else if (left === 1) rowClass = "bg-yellow-200";
-              else if (left <= 0 && row.original.handover_at) rowClass = "bg-red-200";
+              else if (left <= 0 && row.original.handover_at)
+                rowClass = "bg-red-200";
               return (
                 <tr key={row.id} className={`border-b ${rowClass}`}>
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="p-2">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    <td
+                      key={cell.id}
+                      className={`p-2 align-top ${
+                        cell.column.columnDef.meta?.className || ""
+                      } whitespace-pre-wrap break-words`}
+                    >
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext()
+                      )}
                     </td>
                   ))}
                 </tr>
@@ -324,24 +376,25 @@ function TryAndBuyPage() {
 function EditableCell({ getValue, row, column, table }: any) {
   const initialValue = getValue() as string;
   const [value, setValue] = useState(initialValue);
+  const ref = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => {
     setValue(initialValue);
   }, [initialValue]);
-  const onBlur = () => table.options.meta?.updateData(row.index, column.id, value);
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      (e.target as HTMLInputElement).blur();
-    } else if (e.key === "Escape") {
-      setValue(initialValue);
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.style.height = "auto";
+      ref.current.style.height = ref.current.scrollHeight + "px";
     }
-  };
+  }, [value]);
+  const onBlur = () =>
+    table.options.meta?.updateData(row.index, column.id, value);
   return (
-    <input
-      className="p-1 w-full bg-transparent outline-none"
+    <textarea
+      ref={ref}
+      className="p-1 w-full bg-transparent outline-none border-0 resize-none whitespace-pre-wrap"
       value={value ?? ""}
       onChange={(e) => setValue(e.target.value)}
       onBlur={onBlur}
-      onKeyDown={onKeyDown}
     />
   );
 }
@@ -362,7 +415,7 @@ function DateCell({ getValue, row, column, table }: any) {
       onChange={onChange}
       onCalendarClose={onBlur}
       dateFormat="yyyy-MM-dd"
-      className="p-1 bg-white border-0 outline-none"
+      className="p-1 bg-transparent border-0 outline-none w-full"
       placeholderText="YYYY-MM-DD"
     />
   );
@@ -380,7 +433,11 @@ function SelectCell(options: string[]) {
       table.options.meta?.updateData(row.index, column.id, e.target.value);
     };
     return (
-      <select className="p-1 bg-white border-0 outline-none" value={value} onChange={onChange}>
+      <select
+        className="p-1 bg-transparent border-0 outline-none w-full"
+        value={value}
+        onChange={onChange}
+      >
         {options.map((o) => (
           <option key={o} value={o}>
             {o}
@@ -389,6 +446,57 @@ function SelectCell(options: string[]) {
       </select>
     );
   };
+}
+
+function ColumnHeader({
+  column,
+  title,
+}: {
+  column: Column<TryBuyRecord, unknown>;
+  title: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1"
+      >
+        {title}
+      </button>
+      {open && (
+        <div className="absolute left-0 mt-1 w-32 bg-white border rounded shadow z-10">
+          <button
+            className="block w-full px-2 py-1 text-left hover:bg-gray-100"
+            onClick={() => {
+              column.toggleSorting(false);
+              setOpen(false);
+            }}
+          >
+            Sort A–Z
+          </button>
+          <button
+            className="block w-full px-2 py-1 text-left hover:bg-gray-100"
+            onClick={() => {
+              column.toggleSorting(true);
+              setOpen(false);
+            }}
+          >
+            Sort Z–A
+          </button>
+          <div className="px-2 py-1">
+            <input
+              type="text"
+              value={(column.getFilterValue() ?? "") as string}
+              onChange={(e) => column.setFilterValue(e.target.value)}
+              className="w-full border p-1"
+              placeholder="Filter"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default withAuth(TryAndBuyPage, { roles: ["country_admin", "superadmin"] });
