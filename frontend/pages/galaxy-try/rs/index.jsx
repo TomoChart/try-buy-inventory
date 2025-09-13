@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import withAuth from "../../../components/withAuth";
 import { API, getToken, handleUnauthorized } from "../../../lib/auth";
 import CsvImportModal from "../../../components/CsvImportModal";
@@ -148,7 +148,7 @@ function GalaxyTryRSPage() {
     }
   }
 
-  async function load() {
+  const load = useCallback(async () => {
     try {
       setLoading(true);
       const r = await fetch(`${API}/admin/galaxy-try/rs/list`, {
@@ -163,9 +163,9 @@ function GalaxyTryRSPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [router]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
     const filtered = rows.filter(r => {
       for (const [k, v] of Object.entries(columnFilters)) {

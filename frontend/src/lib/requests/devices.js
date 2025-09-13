@@ -1,9 +1,6 @@
 // src/lib/requests/devices.js
-// Pretpostavka: imaš getToken() već negdje u lib-u (npr. src/lib/auth/getToken.js)
-// Ako je na drugom putu, samo prilagodi import ispod.
-import { getToken } from '@/lib/auth/getToken';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
+// Fetch helpers for device inventory
+import { API, getToken } from '../../../lib/auth';
 
 async function safeJson(res) {
   try { return await res.json(); } catch { return null; }
@@ -11,7 +8,7 @@ async function safeJson(res) {
 
 export async function fetchDevicesList(code) {
   const token = getToken();
-  const res = await fetch(`${API_BASE}/admin/devices/${String(code).toUpperCase()}/list`, {
+  const res = await fetch(`${API}/admin/devices/${String(code).toUpperCase()}/list`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: 'no-store',
   });
@@ -25,7 +22,7 @@ export async function fetchDevicesList(code) {
 export async function fetchDeviceDetail(code, serial) {
   const token = getToken();
   const res = await fetch(
-    `${API_BASE}/admin/devices/${String(code).toUpperCase()}/${encodeURIComponent(serial)}`,
+    `${API}/admin/devices/${String(code).toUpperCase()}/${encodeURIComponent(serial)}`,
     {
       headers: { Authorization: `Bearer ${token}` },
       cache: 'no-store',

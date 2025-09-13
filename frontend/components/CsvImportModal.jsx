@@ -96,6 +96,11 @@ export default function CsvImportModal({ onClose, countryCode = "HR", kind = "de
   const [posting, setPosting] = useState(false);
   const [result, setResult] = useState(null);
 
+  const targetFields = useMemo(
+    () => (kind === "devices" ? DEVICE_FIELDS : LEAD_FIELDS),
+    [kind]
+  );
+
   function handleFile(f) {
     setFile(f);
 
