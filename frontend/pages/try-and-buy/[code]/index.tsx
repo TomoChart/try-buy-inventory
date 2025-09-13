@@ -167,10 +167,10 @@ async function importToBackend(country: string, rows: TryBuyRecord[]) {
   const token = getToken();
   if (!token) throw new Error("No token");
 
-  const payload = {
-    mode: "upsert",
-    rows: rows.map(mapUiToImportRow).filter(r => r.email || r.phone || r.serial,
-  };
+ const payload = {
+  mode: "upsert",
+  rows: rows.map(mapUiToImportRow).filter(r => r.email || r.phone || r.serial),
+};
 
   const res = await fetch(`${API}/admin/galaxy-try/${String(country).toUpperCase()}/import?mode=upsert`, {
     method: "POST",
