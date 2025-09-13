@@ -1,0 +1,551 @@
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/router";
+import withAuth from "../../../components/withAuth";
+import HomeButton from "../../../components/HomeButton";
+import {
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  useReactTable,
+  ColumnDef,
+  RowData,
+  Column,
+} from "@tanstack/react-table";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import * as XLSX from "xlsx";
+import { z } from "zod";
+import toast, { Toaster } from "react-hot-toast";
+
+declare module "@tanstack/react-table" {
+  interface TableMeta<TData extends RowData> {
+    updateData: (rowIndex: number, columnId: string, value: unknown) => void;
+  }
+  interface ColumnMeta<TData extends RowData, TValue> {
+    className?: string;
+  }
+}
+
+
+export interface TryBuyRecord {
+  submission_id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  postal_code: string;
+  pickup_city: string;
+  created_at: string | null;
+  contacted: "Yes" | "No" | "";
+  handover_at: string | null;
+  model: "Fold7" | "Watch8" | "";
+  serial: string;
+  note: string;
+  returned?: boolean;
+  feedback?: string;
+}
+
+const recordSchema = z.object({
+  submission_id: z.string(),
+  first_name: z.string().optional().or(z.literal("")),
+  last_name: z.string().optional().or(z.literal("")),
+  email: z.string().email().optional().or(z.literal("")),
+  phone: z.string().optional().or(z.literal("")),
+  address: z.string().optional().or(z.literal("")),
+  city: z.string().optional().or(z.literal("")),
+  postal_code: z.string().optional().or(z.literal("")),
+  pickup_city: z.string().optional().or(z.literal("")),
+  created_at: z.string().nullable().refine((v) => v == null || /^\d{4}-\d{2}-\d{2}$/.test(v), {
+    message: "Invalid date",
+  }),
+  contacted: z.enum(["Yes", "No", ""]).default(""),
+  handover_at: z.string().nullable().refine((v) => v == null || /^\d{4}-\d{2}-\d{2}$/.test(v), {
+    message: "Invalid date",
+  }),
+  model: z.enum(["Fold7", "Watch8", ""]).default(""),
+  serial: z.string().optional().or(z.literal("")),
+  note: z.string().optional().or(z.literal("")),
+  returned: z.boolean().optional(),
+  feedback: z.string().optional().or(z.literal("")),
+});
+
+const toDateString = (d: Date | null) => {
+  if (!d) return null;
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const parseDateString = (s: string | null) => {
+  if (!s) return null;
+  if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
+    const [d, m, y] = s.split("-");
+    return new Date(`${y}-${m}-${d}T00:00:00`);
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(`${s}T00:00:00`);
+  return null;
+};
+
+const calcDaysLeft = (handover: string | null, returned?: boolean) => {
+  if (!handover || returned) return "";
+  const d = parseDateString(handover);
+  if (!d) return "";
+  const diff = Math.floor((Date.now() - d.getTime()) / 86400000);
+  const left = 14 - diff;
+  return String(left);
+};
+
+function TryAndBuyPage() {
+  const router = useRouter();
+  const { code } = router.query as { code?: string };
+  const country = String(code || "hr").toLowerCase();
+  const [data, setData] = useState<TryBuyRecord[]>([]);
+  const [skipDuplicates, setSkipDuplicates] = useState(false);
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!country) return;
+    fetch(`/api/trybuy/${country}`)
+      .then((r) => r.json())
+      .then((d) => setData(d))
+      .catch(() => toast.error("Failed to load data"));
+  }, [country]);
+
+  const w30 = "w-[30ch]";
+  const w20 = "w-[20ch]";
+  const w10 = "w-[10ch]";
+  const w6 = "w-[6ch]";
+  const w12 = "w-[12ch]";
+
+  const col = (
+    key: keyof TryBuyRecord,
+    width: string,
+    cell?: any,
+    title?: string
+  ): ColumnDef<TryBuyRecord> => ({
+    accessorKey: key,
+    header: ({ column }) => <ColumnHeader column={column} title={title || key} />,
+    cell: cell ?? EditableCell,
+    meta: { className: width },
+  });
+
+  const columns = useMemo<ColumnDef<TryBuyRecord>[]>(
+    () => [
+      {
+        id: "select",
+        header: () => null,
+        cell: ({ row }) => (
+          <input
+            type="checkbox"
+            checked={!!selected[row.original.submission_id]}
+            onChange={(e) =>
+              setSelected((s) => ({
+                ...s,
+                [row.original.submission_id]: e.target.checked,
+              }))
+            }
+          />
+        ),
+        meta: { className: w6 },
+      },
+      col("first_name", w12),
+      col("last_name", w12),
+      col("email", `${w30} whitespace-nowrap break-normal`, InputCell),
+      col("phone", w20, InputCell),
+      col("address", w30),
+      col("city", w10),
+      col("postal_code", w6),
+      col("pickup_city", w10),
+      col("created_at", w12, DateCell),
+      col("contacted", w12, SelectCell(["", "Yes", "No"])),
+      col("handover_at", w12, DateCell),
+      {
+        id: "days_left",
+        header: ({ column }) => <ColumnHeader column={column} title="days_left" />,
+        cell: ({ row }) => calcDaysLeft(row.original.handover_at, row.original.returned),
+        meta: { className: w6 },
+      },
+      col("model", w12, SelectCell(["", "Fold7", "Watch8"])),
+      col("serial", w12),
+      col("note", w12),
+      {
+        accessorKey: "returned",
+        header: ({ column }) => <ColumnHeader column={column} title="returned" />,
+        cell: ({ getValue, row, column, table }) => {
+          const v = getValue() as boolean | undefined;
+          return (
+            <input
+              type="checkbox"
+              checked={!!v}
+              onChange={(e) =>
+                table.options.meta?.updateData(row.index, column.id, e.target.checked)
+              }
+            />
+          );
+        },
+        meta: { className: w6 },
+      },
+      col("feedback", w30, EditableCell, "user_feedback"),
+    ],
+    [selected]
+  );
+
+  const table = useReactTable({
+    data,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: { pagination: { pageSize: 50 } },
+    meta: {
+      updateData: (rowIndex: number, columnId: string, value: any) => {
+        setData((old) => {
+          const newData = [...old];
+          const row = { ...newData[rowIndex], [columnId]: value } as TryBuyRecord;
+          const validation = recordSchema.safeParse(row);
+          if (!validation.success) {
+            toast.error(validation.error.issues[0]?.message || "Validation error");
+            return old;
+          }
+          newData[rowIndex] = row;
+          const id = row.submission_id;
+          fetch(`/api/trybuy/${country}/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ [columnId]: value }),
+          }).catch(() => toast.error("Save failed"));
+          return newData;
+        });
+      },
+    },
+  });
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const bstr = evt.target?.result;
+      if (!bstr) return;
+      const wb = XLSX.read(bstr, { type: "binary" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows: any[] = XLSX.utils.sheet_to_json(ws);
+      const imported: TryBuyRecord[] = rows.map((r) => ({
+        submission_id: String(r.submission_id ?? r.Submission_ID ?? ""),
+        first_name: String(r.first_name ?? ""),
+        last_name: String(r.last_name ?? ""),
+        email: String(r.email ?? ""),
+        phone: String(r.phone ?? ""),
+        address: String(r.address ?? ""),
+        city: String(r.city ?? ""),
+        postal_code: String(r.postal_code ?? ""),
+        pickup_city: String(r.pickup_city ?? ""),
+        created_at: toDateString(parseDateString(String(r.created_at ?? ""))),
+        contacted: r.contacted === "Yes" || r.contacted === "No" ? r.contacted : "",
+        handover_at: toDateString(parseDateString(String(r.handover_at ?? ""))),
+        model: r.model === "Fold7" || r.model === "Watch8" ? r.model : "",
+        serial: String(r.serial ?? ""),
+        note: String(r.note ?? ""),
+        returned: false,
+        feedback: "",
+      }));
+
+      setData((prev) => {
+        const map = new Map<string, TryBuyRecord>();
+        prev.forEach((p) => map.set(p.submission_id, p));
+        imported.forEach((imp) => {
+          if (map.has(imp.submission_id)) {
+            if (!skipDuplicates) {
+              map.set(imp.submission_id, { ...map.get(imp.submission_id)!, ...imp });
+            }
+          } else {
+            map.set(imp.submission_id, imp);
+          }
+        });
+        return Array.from(map.values());
+      });
+      toast.success("Import complete");
+      e.target.value = "";
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleDeleteSelected = () => {
+    const ids = Object.keys(selected).filter((id) => selected[id]);
+    if (!ids.length) return;
+    setData((prev) => prev.filter((r) => !ids.includes(r.submission_id)));
+    setSelected({});
+    Promise.all(
+      ids.map((id) =>
+        fetch(`/api/trybuy/${country}/${id}`, { method: "DELETE" })
+      )
+    ).catch(() => toast.error("Delete failed"));
+  };
+
+  return (
+    <div
+      className="p-6 min-h-screen bg-cover bg-center"
+      style={{ backgroundImage: "url('/Background galaxytry.jpg')" }}
+    >
+      <Toaster />
+      <HomeButton />
+      <div className="flex items-center gap-4 mb-4">
+        <label className="flex items-center gap-2">
+          <input type="file" accept=".xlsx" onChange={handleFile} />
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={skipDuplicates}
+            onChange={(e) => setSkipDuplicates(e.target.checked)}
+          />
+          skip duplicates
+        </label>
+        <button
+          onClick={handleDeleteSelected}
+          disabled={!Object.values(selected).some(Boolean)}
+          className="px-2 py-1 border rounded disabled:opacity-50"
+        >
+          Delete Selected
+        </button>
+      </div>
+      <div className="overflow-x-auto bg-gray-200/50 text-black">
+        <table className="text-sm min-w-max">
+          <thead>
+            {table.getHeaderGroups().map((hg) => (
+              <tr key={hg.id}>
+                {hg.headers.map((header) => (
+                  <th
+                    key={header.id}
+                    className={`p-2 border-b text-left ${
+                      header.column.columnDef.meta?.className || ""
+                    }`}
+                  >
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
+                  </th>
+                ))}
+              </tr>
+            ))}
+          </thead>
+          <tbody>
+            {table.getRowModel().rows.map((row) => {
+              const left = Number(
+                calcDaysLeft(row.original.handover_at, row.original.returned)
+              );
+              let rowClass = "";
+              if (row.original.returned) rowClass = "bg-blue-200";
+              else if (left === 1) rowClass = "bg-yellow-200";
+              else if (left <= 0 && row.original.handover_at)
+                rowClass = "bg-red-200";
+              return (
+                <tr key={row.id} className={`border-b ${rowClass}`}>
+                  {row.getVisibleCells().map((cell) => (
+                    <td
+                      key={cell.id}
+                      className={`p-2 align-top whitespace-pre-wrap break-words ${
+                        cell.column.columnDef.meta?.className || ""
+                      }`}
+                    >
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext()
+                      )}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="flex items-center gap-2 mt-4">
+        <button
+          onClick={() => table.previousPage()}
+          disabled={!table.getCanPreviousPage()}
+          className="px-2 py-1 border rounded"
+        >
+          Prev
+        </button>
+        <button
+          onClick={() => table.nextPage()}
+          disabled={!table.getCanNextPage()}
+          className="px-2 py-1 border rounded"
+        >
+          Next
+        </button>
+        <span className="ml-4">
+          Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+        </span>
+        <select
+          value={table.getState().pagination.pageSize}
+          onChange={(e) => table.setPageSize(Number(e.target.value))}
+          className="ml-4 border p-1"
+        >
+          {[50, 100].map((size) => (
+            <option key={size} value={size}>
+              Show {size}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+  );
+}
+
+function EditableCell({ getValue, row, column, table }: any) {
+  const initialValue = getValue() as string;
+  const [value, setValue] = useState(initialValue);
+  const ref = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    setValue(initialValue);
+  }, [initialValue]);
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.style.height = "auto";
+      ref.current.style.height = ref.current.scrollHeight + "px";
+    }
+  }, [value]);
+  const onBlur = () =>
+    table.options.meta?.updateData(row.index, column.id, value);
+  return (
+    <textarea
+      ref={ref}
+      className="p-1 w-full bg-transparent outline-none border-0 resize-none whitespace-pre-wrap"
+      value={value ?? ""}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={onBlur}
+    />
+  );
+}
+
+function InputCell({ getValue, row, column, table }: any) {
+  const initialValue = getValue() as string;
+  const [value, setValue] = useState(initialValue);
+  useEffect(() => {
+    setValue(initialValue);
+  }, [initialValue]);
+  const onBlur = () =>
+    table.options.meta?.updateData(row.index, column.id, value);
+  return (
+    <input
+      className="p-1 w-full bg-transparent outline-none border-0"
+      value={value ?? ""}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={onBlur}
+    />
+  );
+}
+
+function DateCell({ getValue, row, column, table }: any) {
+  const initial = parseDateString(getValue());
+  const [value, setValue] = useState<Date | null>(initial);
+  useEffect(() => {
+    setValue(initial);
+  }, [initial]);
+  const onChange = (d: Date | null) => {
+    setValue(d);
+  };
+  const onBlur = () => table.options.meta?.updateData(row.index, column.id, toDateString(value));
+  return (
+    <DatePicker
+      selected={value}
+      onChange={onChange}
+      onCalendarClose={onBlur}
+      dateFormat="yyyy-MM-dd"
+      className="p-1 bg-transparent border-0 outline-none w-full"
+      placeholderText="YYYY-MM-DD"
+    />
+  );
+}
+
+function SelectCell(options: string[]) {
+  return function SelectCellComponent({ getValue, row, column, table }: any) {
+    const initialValue = getValue() as string;
+    const [value, setValue] = useState(initialValue);
+    useEffect(() => {
+      setValue(initialValue);
+    }, [initialValue]);
+    const onChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+      setValue(e.target.value);
+      table.options.meta?.updateData(row.index, column.id, e.target.value);
+    };
+    return (
+      <select
+        className="p-1 bg-transparent border-0 outline-none w-full"
+        value={value}
+        onChange={onChange}
+      >
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+    );
+  };
+}
+
+function ColumnHeader({
+  column,
+  title,
+}: {
+  column: Column<TryBuyRecord, unknown>;
+  title: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1"
+      >
+        {title}
+        <span className="text-xs">▼</span>
+      </button>
+      {open && (
+        <div className="absolute left-0 mt-1 w-32 bg-white border rounded shadow z-10">
+          <button
+            className="block w-full px-2 py-1 text-left hover:bg-gray-100"
+            onClick={() => {
+              column.toggleSorting(false);
+              setOpen(false);
+            }}
+          >
+            Sort A–Z
+          </button>
+          <button
+            className="block w-full px-2 py-1 text-left hover:bg-gray-100"
+            onClick={() => {
+              column.toggleSorting(true);
+              setOpen(false);
+            }}
+          >
+            Sort Z–A
+          </button>
+          <div className="px-2 py-1">
+            <input
+              type="text"
+              value={(column.getFilterValue() ?? "") as string}
+              onChange={(e) => column.setFilterValue(e.target.value)}
+              className="w-full border p-1"
+              placeholder="Filter"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default withAuth(TryAndBuyPage, { roles: ["country_admin", "superadmin"] });
