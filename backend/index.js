@@ -104,6 +104,8 @@ app.get('/',  (_req,res)=>res.send({status:'OK'}));
 app.get('/healthz', (_req,res)=>res.status(200).send({status:'healthy'}));
 
 // 5) SVE ostale rute (devices, galaxy-try, users, …) TEK SADA:
+const trybuyRoutes = require('./routes/trybuy');
+app.use('/api/trybuy', trybuyRoutes);
 
 // ===== Auth =====
 app.post('/auth/login', async (req, res) => {
