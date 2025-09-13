@@ -106,6 +106,7 @@ function TryAndBuyPage() {
   const country = String(code || "hr").toLowerCase();
   const [data, setData] = useState<TryBuyRecord[]>([]);
   const [skipDuplicates, setSkipDuplicates] = useState(false);
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!country) return;
@@ -115,9 +116,11 @@ function TryAndBuyPage() {
       .catch(() => toast.error("Failed to load data"));
   }, [country]);
 
-  const wDate = "w-28";
-  const wBase = "w-40";
-  const wWide = "w-80";
+  const w30 = "w-[30ch]";
+  const w20 = "w-[20ch]";
+  const w10 = "w-[10ch]";
+  const w6 = "w-[6ch]";
+  const w12 = "w-[12ch]";
 
   const col = (
     key: keyof TryBuyRecord,
@@ -126,41 +129,53 @@ function TryAndBuyPage() {
     title?: string
   ): ColumnDef<TryBuyRecord> => ({
     accessorKey: key,
-    header: ({ column }) => (
-      <ColumnHeader column={column} title={title || key} />
-    ),
+    header: ({ column }) => <ColumnHeader column={column} title={title || key} />,
     cell: cell ?? EditableCell,
     meta: { className: width },
   });
 
   const columns = useMemo<ColumnDef<TryBuyRecord>[]>(
     () => [
-      col("first_name", wBase),
-      col("last_name", wWide),
-      col("email", wWide),
-      col("phone", wBase),
-      col("address", wWide),
-      col("city", wWide),
-      col("postal_code", wBase),
-      col("pickup_city", wBase),
-      col("created_at", wDate, DateCell),
-      col("contacted", wBase, SelectCell(["", "Yes", "No"])),
-      col("handover_at", wDate, DateCell),
+      {
+        id: "select",
+        header: () => null,
+        cell: ({ row }) => (
+          <input
+            type="checkbox"
+            checked={!!selected[row.original.submission_id]}
+            onChange={(e) =>
+              setSelected((s) => ({
+                ...s,
+                [row.original.submission_id]: e.target.checked,
+              }))
+            }
+          />
+        ),
+        meta: { className: w6 },
+      },
+      col("first_name", w12),
+      col("last_name", w12),
+      col("email", `${w30} whitespace-nowrap break-normal`, InputCell),
+      col("phone", w20, InputCell),
+      col("address", w30),
+      col("city", w10),
+      col("postal_code", w6),
+      col("pickup_city", w10),
+      col("created_at", w12, DateCell),
+      col("contacted", w12, SelectCell(["", "Yes", "No"])),
+      col("handover_at", w12, DateCell),
       {
         id: "days_left",
         header: ({ column }) => <ColumnHeader column={column} title="days_left" />,
-        cell: ({ row }) =>
-          calcDaysLeft(row.original.handover_at, row.original.returned),
-        meta: { className: "w-24" },
+        cell: ({ row }) => calcDaysLeft(row.original.handover_at, row.original.returned),
+        meta: { className: w6 },
       },
-      col("model", wBase, SelectCell(["", "Fold7", "Watch8"])),
-      col("serial", wWide),
-      col("note", wBase),
+      col("model", w12, SelectCell(["", "Fold7", "Watch8"])),
+      col("serial", w12),
+      col("note", w12),
       {
         accessorKey: "returned",
-        header: ({ column }) => (
-          <ColumnHeader column={column} title="returned" />
-        ),
+        header: ({ column }) => <ColumnHeader column={column} title="returned" />,
         cell: ({ getValue, row, column, table }) => {
           const v = getValue() as boolean | undefined;
           return (
@@ -168,20 +183,16 @@ function TryAndBuyPage() {
               type="checkbox"
               checked={!!v}
               onChange={(e) =>
-                table.options.meta?.updateData(
-                  row.index,
-                  column.id,
-                  e.target.checked
-                )
+                table.options.meta?.updateData(row.index, column.id, e.target.checked)
               }
             />
           );
         },
-        meta: { className: "w-24" },
+        meta: { className: w6 },
       },
-      col("feedback", wWide, EditableCell, "user_feedback"),
+      col("feedback", w30, EditableCell, "user_feedback"),
     ],
-    []
+    [selected]
   );
 
   const table = useReactTable({
@@ -265,6 +276,18 @@ function TryAndBuyPage() {
     reader.readAsBinaryString(file);
   };
 
+  const handleDeleteSelected = () => {
+    const ids = Object.keys(selected).filter((id) => selected[id]);
+    if (!ids.length) return;
+    setData((prev) => prev.filter((r) => !ids.includes(r.submission_id)));
+    setSelected({});
+    Promise.all(
+      ids.map((id) =>
+        fetch(`/api/trybuy/${country}/${id}`, { method: "DELETE" })
+      )
+    ).catch(() => toast.error("Delete failed"));
+  };
+
   return (
     <div
       className="p-6 min-h-screen bg-cover bg-center"
@@ -284,9 +307,16 @@ function TryAndBuyPage() {
           />
           skip duplicates
         </label>
+        <button
+          onClick={handleDeleteSelected}
+          disabled={!Object.values(selected).some(Boolean)}
+          className="px-2 py-1 border rounded disabled:opacity-50"
+        >
+          Delete Selected
+        </button>
       </div>
       <div className="overflow-x-auto bg-gray-200/50 text-black">
-        <table className="min-w-full text-sm">
+        <table className="text-sm min-w-max">
           <thead>
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
@@ -323,9 +353,9 @@ function TryAndBuyPage() {
                   {row.getVisibleCells().map((cell) => (
                     <td
                       key={cell.id}
-                      className={`p-2 align-top ${
+                      className={`p-2 align-top whitespace-pre-wrap break-words ${
                         cell.column.columnDef.meta?.className || ""
-                      } whitespace-pre-wrap break-words`}
+                      }`}
                     >
                       {flexRender(
                         cell.column.columnDef.cell,
@@ -399,6 +429,24 @@ function EditableCell({ getValue, row, column, table }: any) {
   );
 }
 
+function InputCell({ getValue, row, column, table }: any) {
+  const initialValue = getValue() as string;
+  const [value, setValue] = useState(initialValue);
+  useEffect(() => {
+    setValue(initialValue);
+  }, [initialValue]);
+  const onBlur = () =>
+    table.options.meta?.updateData(row.index, column.id, value);
+  return (
+    <input
+      className="p-1 w-full bg-transparent outline-none border-0"
+      value={value ?? ""}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={onBlur}
+    />
+  );
+}
+
 function DateCell({ getValue, row, column, table }: any) {
   const initial = parseDateString(getValue());
   const [value, setValue] = useState<Date | null>(initial);
@@ -463,6 +511,7 @@ function ColumnHeader({
         className="flex items-center gap-1"
       >
         {title}
+        <span className="text-xs">▼</span>
       </button>
       {open && (
         <div className="absolute left-0 mt-1 w-32 bg-white border rounded shadow z-10">
