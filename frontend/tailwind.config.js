@@ -8,7 +8,9 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        'samsung-blue': '#1428A0'
+        'samsung-blue': '#1428A0',
+        'samsung-blue-dark': '#1428A0',
+        'samsung-blue-light': '#1B4FD9'
       }
     }
   },
