@@ -10,12 +10,20 @@ import {
   getSortedRowModel,
   useReactTable,
   ColumnDef,
+  RowData,
 } from "@tanstack/react-table";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import * as XLSX from "xlsx";
 import { z } from "zod";
 import toast, { Toaster } from "react-hot-toast";
+
+declare module "@tanstack/react-table" {
+  interface TableMeta<TData extends RowData> {
+    updateData: (rowIndex: number, columnId: string, value: unknown) => void;
+  }
+}
+
 
 export interface TryBuyRecord {
   submission_id: string;
