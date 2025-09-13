@@ -82,7 +82,7 @@ function GalaxyTryRSPage() {
   }
 
   function normalizeRow(r = {}) {
-    const contacted = r.contacted ?? r["Contacted"] ?? !!r.contacted;
+    const contacted = r.contacted ?? r["Contacted"];
     return {
       submission_id: r.submission_id ?? r["Submission ID"] ?? "",
       first_name:     r.first_name     ?? r["First Name"]     ?? "",
@@ -93,12 +93,11 @@ function GalaxyTryRSPage() {
       city:           r.city           ?? r["City"]           ?? "",
       pickup_city:    r.pickup_city    ?? r["Pickup City"]    ?? "",
       created_at:     r.created_at     ?? r["Created At"]     ?? "",
-      contacted: r.contacted ?? "",
-      handover_at:  r.handover_at  ?? r["Handover At"]    ?? "",
+      handover_at:    r.handover_at    ?? r["Handover At"]    ?? "",
       model:          r.model          ?? r["Model"]          ?? "",
-      imei:  r.imei  ?? r["IMEI"]  ?? "",
+      imei:           r.imei           ?? r["IMEI"]           ?? "",
       note:           r.note           ?? r["Note"]           ?? "",
-      contacted: Boolean(contacted),
+      contacted:      Boolean(contacted),
     };
   }
   async function handleDelete(submissionId) {
@@ -138,7 +137,7 @@ function GalaxyTryRSPage() {
       setRows(prev =>
         prev.map(r =>
           r.submission_id === id
-            ? { ...r, contacted: checked, contacted: checked ? new Date().toISOString() : null }
+            ? { ...r, contacted: checked }
             : r
         )
       );
