@@ -693,7 +693,7 @@ function EditForm({ initial, onCancel, onSaved }) {
     city:           initial.city       || "",
     pickup_city:    initial.pickup_city|| "",
     // 👇 new
-    created_at:     toInputDateValue(initial.created_at),
+    created_at:     toDateOnly(initial.created_at),
     contacted:      !!initial.contacted,
     handover_at:    initial.handover_at  || "",
     model:          initial.model          || "",
