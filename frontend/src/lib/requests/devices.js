@@ -1,7 +1,7 @@
 // src/lib/requests/devices.js
 // Pretpostavka: imaš getToken() već negdje u lib-u (npr. src/lib/auth/getToken.js)
 // Ako je na drugom putu, samo prilagodi import ispod.
-import { getToken } from '@/lib/auth/getToken';
+import { getToken } from '../../../lib/auth';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE;
 

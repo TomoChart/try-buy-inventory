@@ -1,10 +1,9 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import withAuth from "../../../components/withAuth";
 import { API, getToken, handleUnauthorized } from "../../../lib/auth";
+import CsvImportModal from "../../../components/CsvImportModal";
 import { useRouter } from "next/router";
 import HomeButton from '../../../components/HomeButton';
-import * as XLSX from "xlsx";
-import Papa from "papaparse";
 import { fetchDevicesList } from "../../../src/lib/requests/devices";
 
 
@@ -16,13 +15,12 @@ function GalaxyTryHRPage() {
   const [editing, setEditing] = useState(null);
   const router = useRouter();
   const [showAdd, setShowAdd] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   const [selected, setSelected] = useState([]);
   const [columnFilters, setColumnFilters] = useState({});
   const [sort, setSort] = useState({ key: "", dir: "asc" });
   const [openMenu, setOpenMenu] = useState(null);
-
-  const fileRef = useRef(null);
 
   // pomoćne
   function toDateOnly(v) {
@@ -184,25 +182,12 @@ function GalaxyTryHRPage() {
 
         <h1 className="text-xl font-bold">Galaxy Try — HR</h1>
 
-        {/* Gumb koji otvara hidden file input */}
-        <div>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-            className="hidden"
-            onChange={async (e) => {
-              await handleImportGalaxyCsv(e); // postojeći handler u istom fileu
-              await load();                   // refresha listu nakon importa
-            }}
-          />
-          <button
-            className="px-3 py-2 bg-blue-600 text-white rounded"
-            onClick={() => fileRef.current?.click()}
-          >
-            Import CSV
-          </button>
-        </div>
+        <button
+          className="px-3 py-2 bg-blue-600 text-white rounded"
+          onClick={() => setShowImport(true)}
+        >
+          Import CSV
+        </button>
       </div>
 
       {loading ? <div>Učitavam…</div> : err ? <div className="text-red-600">{err}</div> : (
@@ -346,6 +331,14 @@ function GalaxyTryHRPage() {
         </div>
       )}
 
+      {showImport && (
+        <CsvImportModal
+          onClose={() => { setShowImport(false); load(); }}
+          countryCode="HR"
+          kind="leads"
+        />
+      )}
+
     </div>
   );
 }
@@ -373,8 +366,20 @@ function daysLeft(handover_at) {
   const diffDays = Math.round((today - start) / (1000*60*60*24));
   return 14 - diffDays; // ako je danas = handover → 14
 }
+function onlyDateISO(v) {
+  if (v == null || v === "") return null;
+  let s = String(v).trim();
+  if (s.includes(" ")) s = s.split(" ")[0];
+  if (s.includes("T")) s = s.split("T")[0];
+  if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
+    const [dd, mm, yyyy] = s.split("-");
+    s = `${yyyy}-${mm}-${dd}`;
+  }
+  const d = new Date(`${s}T00:00:00Z`);
+  return isNaN(d) ? null : d.toISOString();
+}
 
-// --- CSV/XLSX import (auto) ---
+/* --- CSV/XLSX import (auto) ---
 const LEAD_FIELDS = [
   "submission_id","created_at","first_name","last_name","email","phone",
   "address","city","postal_code","pickup_city","contacted",
@@ -579,6 +584,7 @@ async function handleImportGalaxyCsv(e) {
     e.target.value = "";
   }
 }
+*/
 
 function EditForm({ initial, onCancel, onSaved }) {
   const [form, setForm] = useState({
