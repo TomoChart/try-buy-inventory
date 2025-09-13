@@ -408,11 +408,22 @@ app.patch('/admin/galaxy-try/:code/:submission_id',
         'model','serial','note'
       ]);
 
-      // zadrži samo dozvoljena polja koja su poslana
+         // zadrži samo dozvoljena polja koja su poslana
       const input = {};
       for (const [k,v] of Object.entries(req.body || {})) {
-        if (ALLOWED.has(k)) input[k] = v ?? null;
+        if (!ALLOWED.has(k)) continue;
+        if (v == null) { input[k] = null; continue; }
+        if (k === 'serial') {
+          const s = String(v).trim().replace(/\s+/g,'');
+          input[k] = s === '' ? null : s;
+        } else if (k === 'model' || k === 'note' || k === 'email' || k === 'phone' || k === 'address' || k === 'city' || k === 'pickup_city' || k === 'first_name' || k === 'last_name') {
+          const s = String(v).trim();
+          input[k] = s === '' ? null : s;
+        } else {
+          input[k] = v;
+        }
       }
+
       if (!Object.keys(input).length) {
         return res.status(400).json({ error: 'Nothing to update' });
       }
@@ -637,8 +648,17 @@ app.post('/admin/galaxy-try/hr/import',
         return isNaN(d) ? null : d.toISOString();
       };
       const numOrNull = (v) => (v === '' || v == null ? null : Number.isFinite(Number(v)) ? Number(v) : null);
-      const strOrNull = (v) => (v == null || v === '' ? null : String(v));
-      const serialStr   = (v) => (v == null ? null : String(v).replace(/\s+/g,''));
+      const strOrNull = (v) => {
+        if (v == null) return null;
+        const s = String(v).trim();
+        return s === '' ? null : s;
+      };
+      const serialStr = (v) => {
+        if (v == null) return null;
+        const s = String(v).trim().replace(/\s+/g, '');
+        return s === '' ? null : s;
+      };
+
 
       let upserted = 0;
 
