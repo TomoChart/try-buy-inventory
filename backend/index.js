@@ -317,6 +317,7 @@ app.patch(
         "email",
         "phone",
         "pickup_city",
+        "created_at",
         "contacted",
         "handover_at",
         "days_left",
@@ -336,6 +337,7 @@ app.patch(
       // jednostavne validacije (po potrebi proširi)
       const isoOrNull = (v) =>
         v == null || v === "" ? null : new Date(v).toString() !== "Invalid Date" ? v : null;
+      if ("created_at" in payload) payload.created_at = isoOrNull(payload.created_at);
       if ("contacted" in payload) payload.contacted = isoOrNull(payload.contacted);
       if ("handover_at" in payload) payload.handover_at = isoOrNull(payload.handover_at);
 
@@ -348,15 +350,16 @@ app.patch(
           address = COALESCE($3, address),
           city = COALESCE($4, city),
           pickup_city = COALESCE($5, pickup_city),
-          contacted = COALESCE($6, contacted),
-          handover_at = COALESCE($7, handover_at),
-          days_left = COALESCE($8, days_left),
-          model = COALESCE($9, model),
-          imei = COALESCE($10, imei),
-          note = COALESCE($11, note)
-        WHERE submission_id = $12 AND country_code = $13
+          created_at = COALESCE($6, created_at),
+          contacted = COALESCE($7, contacted),
+          handover_at = COALESCE($8, handover_at),
+          days_left = COALESCE($9, days_left),
+          model = COALESCE($10, model),
+          imei = COALESCE($11, imei),
+          note = COALESCE($12, note)
+        WHERE submission_id = $13 AND country_code = $14
         RETURNING
-          submission_id, email, phone, address, city, pickup_city, contacted, handover_at, days_left, model, imei, note
+          submission_id, email, phone, address, city, pickup_city, created_at, contacted, handover_at, days_left, model, imei, note
       `;
 
       const vals = [
@@ -365,6 +368,7 @@ app.patch(
         payload.address ?? null,
         payload.city ?? null,
         payload.pickup_city ?? null,
+        payload.created_at ?? null,
         payload.contacted ?? null,
         payload.handover_at ?? null,
         payload.days_left ?? null,
@@ -400,7 +404,7 @@ app.patch('/admin/galaxy-try/:code/:submission_id',
       const ALLOWED = new Set([
         'first_name','last_name','email','phone',
         'address','city','pickup_city',
-        'contacted','handover_at','days_left',
+        'created_at','contacted','handover_at','days_left',
         'model','imei','note'
       ]);
 
@@ -467,7 +471,7 @@ app.post('/admin/galaxy-try/:code',
       const ALLOWED = new Set([
         'first_name','last_name','email','phone',
         'address','city','pickup_city',
-        'contacted','handover_at','days_left',
+        'created_at','contacted','handover_at','days_left',
         'model','imei','note'
       ]);
 
@@ -481,6 +485,7 @@ app.post('/admin/galaxy-try/:code',
       const submission_id = String(b.submission_id || crypto.randomUUID());
 
       // normalizacija datuma (ako su došli kao "YYYY-MM-DD")
+      if (payload.created_at) payload.created_at = new Date(payload.created_at);
       if (payload.contacted) payload.contacted = new Date(payload.contacted);
       if (payload.handover_at)  payload.handover_at  = new Date(payload.handover_at);
 
