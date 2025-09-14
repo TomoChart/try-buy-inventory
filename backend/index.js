@@ -667,7 +667,7 @@ app.post('/admin/galaxy-try/hr/import',
       for (const r of rows) {
         if (!r.submission_id) continue;
 
-        // === Normalize created_at, date_contacted, handover_at ===
+        // === Normalize created_at, contacted, handover_at ===
         if (r.created_at) {
           let d = String(r.created_at);
           if (d.includes(' ')) d = d.split(' ')[0];
@@ -677,15 +677,8 @@ app.post('/admin/galaxy-try/hr/import',
           }
           r.created_at = new Date(`${d}T00:00:00Z`);
         }
-        if (r.date_contacted) {
-          let d = String(r.date_contacted);
-          if (d.includes(' ')) d = d.split(' ')[0];
-          if (/^\d{2}-\d{2}-\d{4}$/.test(d)) {
-            const [day, mon, yr] = d.split('-');
-            d = `${yr}-${mon}-${day}`;
-          }
-          r.date_contacted = new Date(`${d}T00:00:00Z`);
-        }
+    
+        
         if (r.handover_at) {
           let d = String(r.handover_at);
           if (d.includes(' ')) d = d.split(' ')[0];
@@ -903,31 +896,29 @@ app.get('/admin/try-and-buy/:code/list',
       }
 
       // Vraćamo snake_case ključeve koje frontend očekuje,
-      // a "contacted" je "Yes" ako postoji date_contacted, inače "".
+      // a "contacted" je "Yes" ako postoji contacted, inače "".
       const sql = `
         SELECT
-          submission_id                         AS submission_id,
-          first_name                            AS first_name,
-          last_name                             AS last_name,
-          email                                 AS email,
-          phone                                 AS phone,
-          address                               AS address,
-          city                                  AS city,
-          postal_code                           AS postal_code,
-          pickup_city                           AS pickup_city,
-          to_char(CAST(created_at AS date), 'YYYY-MM-DD')   AS created_at,
-          CASE WHEN date_contacted IS NOT NULL THEN 'Yes' ELSE '' END
-                                               AS contacted,
-          to_char(CAST(handover_at AS date), 'YYYY-MM-DD')
-                                               AS handover_at,
-          model                                 AS model,
-          serial                                AS serial,
-          note                                  AS note,
-          returned                              AS returned,
-          feedback                              AS feedback
-        FROM leads_import
+          submission_id                    AS submission_id,
+          first_name                       AS first_name,
+          last_name                        AS last_name,
+          email                            AS email,
+          phone                            AS phone,
+          address                          AS address,
+          city                             AS city,
+          postal_code                      AS postal_code,
+          pickup_city                      AS pickup_city,
+          created_at                       AS created_at,
+          CASE WHEN NULLIF(contacted, '') IS NOT NULL THEN 'Yes' ELSE '' END AS contacted,
+          handover_at                      AS handover_at,
+          model                            AS model,
+          serial                           AS serial,
+          note                             AS note,
+          return                           AS return,
+          user_feedback                    AS user_feedback
+        FROM public.leads_import
         WHERE country_code = $1
-        ORDER BY created_at DESC NULLS LAST, submission_id DESC
+        ORDER BY submission_id DESC
       `;
       const rows = await prisma.$queryRawUnsafe(sql, code);
       return res.json(rows || []);
