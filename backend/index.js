@@ -928,3 +928,394 @@ app.get('/admin/try-and-buy/:code/list',
     }
   }
 );
+
+// === TRY-AND-BUY: PATCH po submission_id i country code ===
+// PATCH /admin/try-and-buy/:code/:submission_id
+// Body: { email?, phone?, address?, city?, pickup_city?, created_at?, contacted?, handover_at?, days_left?, model?, serial?, note? }
+app.patch(
+  '/admin/try-and-buy/:code/:submission_id',
+  requireAuth, requireRole('country_admin','superadmin'),
+  async (req, res) => {
+    try {
+      const code = String(req.params.code || '').toUpperCase();
+      const sid  = String(req.params.submission_id || '');
+      if (!['HR','SI','RS'].includes(code) || !sid) {
+        return res.status(400).json({ error: 'Bad request' });
+      }
+
+      const ALLOWED = new Set([
+        'email','phone','address','city','pickup_city',
+        'created_at','contacted','handover_at','days_left',
+        'model','serial','note'
+      ]);
+
+         // zadrži samo dozvoljena polja koja su poslana
+      const input = {};
+      for (const [k,v] of Object.entries(req.body || {})) {
+        if (!ALLOWED.has(k)) continue;
+        if (v == null) { input[k] = null; continue; }
+        if (k === 'serial') {
+          const s = String(v).trim().replace(/\s+/g,'');
+          input[k] = s === '' ? null : s;
+        } else if (k === 'model' || k === 'note' || k === 'email' || k === 'phone' || k === 'address' || k === 'city' || k === 'pickup_city') {
+          const s = String(v).trim();
+          input[k] = s === '' ? null : s;
+        } else {
+          input[k] = v;
+        }
+      }
+
+      if (!Object.keys(input).length) {
+        return res.status(400).json({ error: 'Nothing to update' });
+      }
+
+      // === Normalize created_at ===
+      if ("created_at" in input) {
+        input.created_at = normalizeDateOnly(input.created_at);
+      }
+
+      // dinamički SET dio za UPDATE
+      const cols = Object.keys(input);
+      const setClauses = cols.map((c,i) => `"${c}" = $${i+1}`).join(', ');
+      const params = cols.map(c => input[c]);
+
+      // WHERE parametri
+      params.push(sid);         // $N-1
+      params.push(code);        // $N
+
+      const sql = `
+        UPDATE leads_import
+        SET ${setClauses}, updated_at = NOW()
+        WHERE submission_id = $${cols.length+1}
+          AND country_code  = $${cols.length+2}
+        RETURNING
+          submission_id    AS "Submission ID",
+          first_name       AS "First Name",
+          last_name        AS "Last Name",
+          email            AS "Email",
+          phone            AS "Phone",
+          address          AS "Address",
+          city             AS "City",
+          pickup_city      AS "Pickup City",
+          created_at       AS "Created At",
+          contacted        AS "Contacted At",
+          handover_at      AS "Handover At",
+          days_left       AS "Days Left",
+          model            AS "Model",
+          serial          AS "Serial",
+          note             AS "Note"
+      `;
+      const rows = await prisma.$queryRawUnsafe(sql, ...params);
+      if (!rows.length) return res.status(404).json({ error: 'Not found' });
+      return res.json({ ok: true, item: rows[0] });
+    } catch (err) {
+      console.error('PATCH /admin/try-and-buy/:code/:submission_id error', err);
+      return res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
+// === TRY-AND-BUY: CREATE (upsert) po country code (HR/SI/RS) ===
+// POST /admin/try-and-buy/:code
+// Body: { submission_id?, email, phone, address, city, pickup_city, created_at, contacted, handover_at, days_left, model, serial, note }
+app.post(
+  '/admin/try-and-buy/:code',
+  requireAuth, requireRole('country_admin','superadmin'),
+  async (req, res) => {
+    try {
+      const code = String(req.params.code || '').toUpperCase();
+      if (!['HR','SI','RS'].includes(code)) {
+        return res.status(400).json({ error: 'Unknown country code' });
+      }
+
+      // Dozvoljena polja koja možemo upisati
+      const ALLOWED = new Set([
+        'submission_id','email','phone','address','city','pickup_city',
+        'created_at','contacted','handover_at','days_left',
+        'model','serial','note'
+      ]);
+
+      const b = req.body || {};
+      const payload = {};
+      for (const [k,v] of Object.entries(b)) {
+        if (ALLOWED.has(k)) payload[k] = v ?? null;
+      }
+
+      // submission_id generiramo ako nije poslan
+      const submission_id = String(b.submission_id || crypto.randomUUID());
+
+      // === Normalize created_at (remove time, parse date) ===
+      if (payload.created_at) {
+        let dateStr = String(payload.created_at);
+        if (dateStr.includes(' ')) dateStr = dateStr.split(' ')[0];      // drop time if "YYYY-MM-DD HH:MM:SS"
+        else if (dateStr.includes('T')) dateStr = dateStr.split('T')[0]; // drop time if ISO string
+        // If in DD-MM-YYYY format, convert to YYYY-MM-DD
+        if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
+          const [d, m, y] = dateStr.split('-');
+          dateStr = `${y}-${m}-${d}`;
+        }
+        payload.created_at = new Date(`${dateStr}T00:00:00Z`);
+      }
+      // ...existing normalization for contacted, handover_at...
+      if (payload.contacted) payload.contacted = new Date(payload.contacted);
+      if (payload.handover_at)  payload.handover_at  = new Date(payload.handover_at);
+
+      const cols = ['submission_id','country_code', ...Object.keys(payload)];
+      const vals = [submission_id, code, ...Object.values(payload)];
+      const placeholders = cols.map((_,i)=>`$${i+1}`).join(', ');
+
+      const sql = `
+        INSERT INTO leads_import (${cols.map(c=>`"${c}"`).join(', ')})
+        VALUES (${placeholders})
+        ON CONFLICT (submission_id) DO UPDATE
+        SET ${Object.keys(payload).map((c,i)=>`"${c}" = EXCLUDED."${c}"`).join(', ')},
+            updated_at = NOW()
+        RETURNING
+          submission_id        AS submission_id,
+          first_name           AS first_name,
+          last_name            AS last_name,
+          email                AS email,
+          phone                AS phone,
+          address              AS address,
+          city                 AS city,
+          pickup_city          AS pickup_city,
+          created_at           AS created_at,
+          contacted       AS contacted,
+          handover_at        AS handover_at,
+          days_left            AS days_left,
+          model                AS model,
+          serial               AS serial,
+          note                 AS note
+      `;
+      const rows = await prisma.$queryRawUnsafe(sql, ...vals);
+      return res.json({ ok: true, item: rows[0] });
+    } catch (err) {
+      console.error('TRY-AND-BUY create error', err);
+      return res.status(500).json({ error: 'Server error' });
+    }
+  }
+);
+
+// === TRY-AND-BUY: DELETE po submission_id i country code ===
+// DELETE /admin/try-and-buy/:code/:submission_id
+app.delete(
+  '/admin/try-and-buy/:code/:submission_id',
+  requireAuth, requireRole('country_admin','superadmin'),
+  async (req, res) => {
+    try {
+      const code = String(req.params.code || '').toUpperCase();
+      const sid  = String(req.params.submission_id || '').trim();
+
+      // Validacije
+      if (!['HR','SI','RS'].includes(code)) {
+        return res.status(400).json({ error: 'Invalid country code (use HR, SI, or RS).' });
+      }
+      if (!sid) {
+        return res.status(400).json({ error: 'Missing submission_id.' });
+      }
+
+      // Brisanje po (submission_id, country_code)
+      const sql = `DELETE FROM leads_import WHERE submission_id = $1 AND country_code = $2`;
+      const count = await prisma.$executeRawUnsafe(sql, sid, code);
+
+      if (!count || Number(count) === 0) {
+        return res.status(404).json({ error: 'Not found.' });
+      }
+
+      // Uspjeh: 204 No Content
+      return res.status(204).send();
+    } catch (err) {
+      console.error('DELETE /admin/try-and-buy/:code/:submission_id error', err);
+      return res.status(500).json({ error: 'Server error.' });
+    }
+  }
+);
+
+// === TRY-AND-BUY: lista po country code (HR/SI/RS)
+app.get('/admin/try-and-buy/:code/list',
+  requireAuth, requireRole('country_admin','superadmin'),
+  async (req, res) => {
+    try {
+      const code = String(req.params.code || '').toUpperCase();
+      if (!['HR','SI','RS'].includes(code)) {
+        return res.status(400).json({ error: 'Unknown country code' });
+      }
+
+      // Napomena:
+      // - izvor je leads_import (ili odgovarajući VIEW ako ga koristiš)
+      // - filtriramo po country_code
+      // - vraćamo i address + city
+      const sql = `
+        SELECT
+          submission_id    AS "Submission ID",
+          first_name       AS "First Name",
+          last_name        AS "Last Name",
+          email            AS "Email",
+          phone            AS "Phone",
+          address          AS "Address",
+          city             AS "City",
+          pickup_city      AS "Pickup City",
+          created_at       AS "Created At",
+          contacted        AS "Contacted At",
+          handover_at      AS "Handover At",
+          model            AS "Model",
+          serial          AS "Serial",
+          note             AS "Note"
+        FROM leads_import
+        WHERE country_code = $1
+        ORDER BY created_at DESC NULLS LAST, submission_id DESC
+      `;
+      const rows = await prisma.$queryRawUnsafe(sql, code);
+          return res.json(rows || []);
+        } catch (err) {
+          console.error('GET /admin/try-and-buy/:code/list error', err);
+          return res.status(500).json({ error: 'Server error' });
+        }
+      }
+    );
+
+// === TRY-AND-BUY: Import (CSV/XLSX) — upsert s created_at + normalizacija ===
+app.post('/admin/try-and-buy/hr/import',
+  requireAuth, requireRole('country_admin','superadmin'),
+  async (req, res) => {
+    try {
+      const { rows } = req.body || {};
+      if (!Array.isArray(rows) || !rows.length) {
+        return res.status(400).json({ error: 'No rows provided' });
+      }
+
+      const isoOrNull = (v) => {
+        if (v == null || v === '') return null;
+        const d = new Date(v);
+        return isNaN(d) ? null : d.toISOString();
+      };
+      const numOrNull = (v) => (v === '' || v == null ? null : Number.isFinite(Number(v)) ? Number(v) : null);
+      const strOrNull = (v) => {
+        if (v == null) return null;
+        const s = String(v).trim();
+        return s === '' ? null : s;
+      };
+      const serialStr = (v) => {
+        if (v == null) return null;
+        const s = String(v).trim().replace(/\s+/g, '');
+        return s === '' ? null : s;
+      };
+
+
+      let upserted = 0;
+
+      for (const r of rows) {
+        if (!r.submission_id) continue;
+
+        // === Normalize created_at, contacted, handover_at ===
+        if (r.created_at) {
+          let d = String(r.created_at);
+          if (d.includes(' ')) d = d.split(' ')[0];
+          if (/^\d{2}-\d{2}-\d{4}$/.test(d)) {
+            const [day, mon, yr] = d.split('-');
+            d = `${yr}-${mon}-${day}`;
+          }
+          r.created_at = new Date(`${d}T00:00:00Z`);
+        }
+    
+        
+        if (r.handover_at) {
+          let d = String(r.handover_at);
+          if (d.includes(' ')) d = d.split(' ')[0];
+          if (/^\d{2}-\d{2}-\d{4}$/.test(d)) {
+            const [day, mon, yr] = d.split('-');
+            d = `${yr}-${mon}-${day}`;
+          }
+          r.handover_at = new Date(`${d}T00:00:00Z`);
+        }
+
+        // Normalizacija ulaza
+        const p = {
+          first_name:  strOrNull(r.first_name),
+          last_name:   strOrNull(r.last_name),
+          email:       strOrNull(r.email),
+          phone:       strOrNull(r.phone),
+          address:     strOrNull(r.address),
+          city:        strOrNull(r.city),
+          pickup_city: strOrNull(r.pickup_city),
+          created_at:  isoOrNull(r.created_at),   // ⇐ NOVO
+          contacted:   isoOrNull(r.contacted),
+          handover_at: isoOrNull(r.handover_at),
+          days_left:   numOrNull(r.days_left),
+          model:       strOrNull(r.model),
+          serial:      serialStr(r.serial),
+          note:        strOrNull(r.note),
+        };
+
+        // UPDATE (uključuje created_at)
+        const qU = `
+          UPDATE leads_import SET
+            first_name  = COALESCE($2, first_name),
+            last_name   = COALESCE($3, last_name),
+            email       = COALESCE($4, email),
+            phone       = COALESCE($5, phone),
+            address     = COALESCE($6, address),
+            city        = COALESCE($7, city),
+            pickup_city = COALESCE($8, pickup_city),
+            created_at  = COALESCE($9, created_at),
+            contacted   = COALESCE($10, contacted),
+            handover_at = COALESCE($11, handover_at),
+            days_left   = COALESCE($12, days_left),
+            model       = COALESCE($13, model),
+            serial      = COALESCE($14, serial),
+            note        = COALESCE($15, note),
+            updated_at  = NOW()
+          WHERE submission_id = $1 AND country_code = 'HR'
+        `;
+        const vU = [
+          r.submission_id,
+          p.first_name, p.last_name, p.email, p.phone,
+          p.address, p.city, p.pickup_city,
+          p.created_at, p.contacted, p.handover_at,
+          p.days_left, p.model, p.serial, p.note
+        ];
+        const updated = await prisma.$executeRawUnsafe(qU, ...vU);
+
+        // INSERT ako ne postoji (s created_at)
+        if (!updated) {
+          const qI = `
+            INSERT INTO leads_import (
+              submission_id, country_code,
+              first_name,last_name,email,phone,address,city,pickup_city,
+              created_at,contacted,handover_at,days_left,model,serial,note,
+              updated_at
+            ) VALUES (
+              $1,'HR',
+              $2,$3,$4,$5,$6,$7,$8,
+              $9,$10,$11,$12,$13,$14,$15,
+              NOW()
+            )
+          `;
+          const vI = [
+            r.submission_id,
+            p.first_name, p.last_name, p.email, p.phone,
+            p.address, p.city, p.pickup_city,
+            p.created_at, p.contacted, p.handover_at,
+            p.days_left, p.model, p.serial, p.note
+          ];
+          await prisma.$executeRawUnsafe(qI, ...vI);
+        }
+
+        upserted++;
+      }
+
+      return res.json({ upserted, mode: 'upsert' });
+    } catch (e) {
+      console.error('Import error', e);
+      return res.status(500).json({ error: 'Import error' });
+    }
+  }
+);
+
+// helper funkcija koja vraća samo datum u ISO formatu ("YYYY-MM-DD")
+function onlyDateISO(input) {
+  if (!input) return null;
+  const d = new Date(input);
+  if (isNaN(d)) return null;
+  return d.toISOString().slice(0, 10); // "YYYY-MM-DD"
+}
