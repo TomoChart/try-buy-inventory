@@ -481,17 +481,21 @@ function TryAndBuyPage() {
     }));
   }
 
+  // Add parsedRows state to hold rows to import
+  const [parsedRows, setParsedRows] = useState<any[]>([]);
+
   const onClickImport = async () => {
     try {
-      if (!parsedRows?.length) { toast.error("Nema redaka za import"); return; }
+      if (!data?.length) { toast.error("Nema redaka za import"); return; }
 
       const token = getToken();
       if (!token) { toast.error("Session expired. Login again."); return; }
 
       const code = String(country).toUpperCase();
+
       const payload = {
         mode: "upsert",
-        rows: mapRowsForImport(code, parsedRows),
+        rows: mapRowsForImport(code, data), // <-- koristimo data, ne parsedRows
       };
 
       const res = await fetch(`${API}/admin/galaxy-try/${code}/import?mode=upsert`, {
