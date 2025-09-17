@@ -404,6 +404,24 @@ function TryAndBuyPage() {
     reader.readAsBinaryString(file);
   };
 
+  // Define load function to refetch data
+  const load = async () => {
+    try {
+      const token = getToken();
+      if (!token) { toast.error("Session expired. Login again."); return; }
+      const codeUpper = String(country).toUpperCase(); // HR / SI / RS
+      const res = await fetch(`${API}/admin/galaxy-try/${codeUpper}/list`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const raw = await res.json();
+      const mapped: TryBuyRecord[] = Array.isArray(raw) ? raw.map(normalizeBackendRow) : [];
+      setData(mapped);
+    } catch (e) {
+      toast.error("Failed to load data");
+    }
+  };
+
   const deleteSelected = () => {
     const ids = table.getSelectedRowModel().rows.map(
       (r) => r.original.submission_id
@@ -419,7 +437,11 @@ function TryAndBuyPage() {
       body: JSON.stringify({ submissionIds: ids }),
     })
       .catch(() => toast.error("Delete failed"))
-      .finally(() => setRowSelection({}));
+      .finally(() => {
+        setRowSelection({});
+        // refetch podataka
+        load();
+      });
   };
 
   return (
@@ -439,6 +461,7 @@ function TryAndBuyPage() {
         </button>
         <label className="flex items-center gap-2">
           <input type="file" accept=".xlsx" onChange={handleFile} />
+          <span className="px-2 py-1 border rounded cursor-pointer bg-white text-black">Import</span>
         </label>
         <label className="flex items-center gap-2 text-sm">
           <input
