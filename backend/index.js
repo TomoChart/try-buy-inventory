@@ -301,8 +301,6 @@ app.get('/admin/galaxy-try/hr/list',
 */
 
 // -------- PATCH: GALAXY TRY (edit po submission_id) ------------------------
-// PATCH /admin/galaxy-try/:code/:id
-// Body: { email?, phone?, pickup_city?, created_at?, contacted?, handover_at?, model?, serial?, note? }
 app.patch(
   "/admin/galaxy-try/:code/:id",
   requireAuth,
@@ -313,50 +311,60 @@ app.patch(
       const id   = String(req.params.id || "").trim();
       if (!code || !id) return res.status(400).json({ error: "Missing code or id" });
 
-      // 1) Normaliziraj ulaz iz frontenda (mapiramo nazive koje UI šalje -> DB kolone)
-      const raw = req.body || {};
+      const raw = req.body ?? {};
+
+      // UI -> DB mapiranja (tvoje kolone su TEXT):
+      const mapUiToDb = {
+        first_name:     "first_name",
+        last_name:      "last_name",
+        email:          "email",
+        phone:          "phone",
+        address:        "address",
+        city:           "city",
+        postal_code:    "postal_code",
+        pickup_city:    "pickup_city",
+        created_at:     "created_at",
+        contacted:      "contacted",      // "Yes" | "" (TEXT)
+        handover_at:    "handover_at",
+        model:          "model",
+        serial:         "serial",
+        note:           "note",
+        // dodatno:
+        feedback:       "user_feedback",
+        user_feedback:  "user_feedback",
+        returned:       "return",         // UI boolean -> "Yes"/""
+        return:         "return"
+      };
+
+      // pripremi payload
       const payload = {};
-
-      // direktna polja (postoje u leads_import kao TEXT)
-      const DIRECT = [
-        "first_name","last_name","email","phone",
-        "address","city","postal_code","pickup_city",
-        "model","note"
-      ];
-      for (const k of DIRECT) if (k in raw) payload[k] = raw[k] ?? null;
-
-      // mapiranja naziva iz UI
-      if ("serial_number" in raw) payload.serial_number = raw.serial_number ?? null;
-      if ("serial" in raw)        payload.serial_number = raw.serial ?? null;        // UI zna slati "serial"
-      if ("handover_at" in raw)   payload.date_handover = raw.handover_at ?? null;  // UI: handover_at -> DB: date_handover
-
-      // UI koristi "contacted": "Yes" | "" -> DB: date_contacted (TEXT)
-      if ("contacted" in raw) {
-        const v = String(raw.contacted || "");
-        payload.date_contacted = v === "Yes" ? (raw.date_contacted || new Date().toISOString()) : null;
+      for (const [uiKey, dbKey] of Object.entries(mapUiToDb)) {
+        if (!(uiKey in raw)) continue;
+        if (uiKey === "returned") {
+          payload[dbKey] = raw.returned ? "Yes" : "";
+        } else {
+          payload[dbKey] = raw[uiKey] === "" ? null : raw[uiKey];
+        }
       }
-      if ("date_contacted" in raw) payload.date_contacted = raw.date_contacted ?? null;
 
-      // Ako nakon filtriranja nema ničega za update:
       const cols = Object.keys(payload);
       if (!cols.length) {
         return res.status(400).json({ error: "No editable fields provided" });
       }
 
-      // 2) Dinamički UPDATE (samo poslana polja)
-      const setSql    = cols.map((c,i) => `"${c}" = $${i+1}`).join(", ");
-      const params    = cols.map(c => payload[c]);
-      params.push(id);   // WHERE submission_id
-      params.push(code); // WHERE country_code
+      // dinamički UPDATE samo poslanih polja
+      const setSql = cols.map((c, i) => `"${c}" = $${i + 1}`).join(", ");
+      const params = cols.map(c => payload[c]);
+      params.push(id, code);
 
       const sql = `
-        UPDATE leads_import
+        UPDATE public.leads_import
            SET ${setSql}
-         WHERE submission_id = $${cols.length+1}
-           AND country_code  = $${cols.length+2}
+         WHERE submission_id = $${cols.length + 1}
+           AND country_code  = $${cols.length + 2}
          RETURNING
            submission_id, first_name, last_name, email, phone, address, city, postal_code,
-           pickup_city, date_contacted, date_handover, model, serial_number, note
+           pickup_city, created_at, contacted, handover_at, model, serial, note, "return", user_feedback
       `;
 
       const rows = await prisma.$queryRawUnsafe(sql, ...params);
