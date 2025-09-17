@@ -310,78 +310,56 @@ app.patch(
   async (req, res) => {
     try {
       const code = String(req.params.code || "").toUpperCase();
-      const id = String(req.params.id || "");
-
+      const id   = String(req.params.id || "").trim();
       if (!code || !id) return res.status(400).json({ error: "Missing code or id" });
 
-      // dozvoljena polja za edit
-      const allowed = [
-        "email",
-        "phone",
-        "pickup_city",
-        "created_at",
-        "contacted",
-        "handover_at",
-        "days_left",
-        "model",
-        "serial",
-        "note",
-      ];
-
+      // 1) Normaliziraj ulaz iz frontenda (mapiramo nazive koje UI šalje -> DB kolone)
+      const raw = req.body || {};
       const payload = {};
-      for (const k of allowed) {
-        if (k in req.body) payload[k] = req.body[k];
+
+      // direktna polja (postoje u leads_import kao TEXT)
+      const DIRECT = [
+        "first_name","last_name","email","phone",
+        "address","city","postal_code","pickup_city",
+        "model","note"
+      ];
+      for (const k of DIRECT) if (k in raw) payload[k] = raw[k] ?? null;
+
+      // mapiranja naziva iz UI
+      if ("serial_number" in raw) payload.serial_number = raw.serial_number ?? null;
+      if ("serial" in raw)        payload.serial_number = raw.serial ?? null;        // UI zna slati "serial"
+      if ("handover_at" in raw)   payload.date_handover = raw.handover_at ?? null;  // UI: handover_at -> DB: date_handover
+
+      // UI koristi "contacted": "Yes" | "" -> DB: date_contacted (TEXT)
+      if ("contacted" in raw) {
+        const v = String(raw.contacted || "");
+        payload.date_contacted = v === "Yes" ? (raw.date_contacted || new Date().toISOString()) : null;
       }
-      if (!Object.keys(payload).length) {
+      if ("date_contacted" in raw) payload.date_contacted = raw.date_contacted ?? null;
+
+      // Ako nakon filtriranja nema ničega za update:
+      const cols = Object.keys(payload);
+      if (!cols.length) {
         return res.status(400).json({ error: "No editable fields provided" });
       }
 
-      // jednostavne validacije (po potrebi proširi)
-      const isoOrNull = (v) =>
-        v == null || v === "" ? null : new Date(v).toString() !== "Invalid Date" ? v : null;
-      if ("contacted" in payload)   payload.contacted   = isoOrNull(payload.contacted);
-      if ("handover_at" in payload) payload.handover_at = isoOrNull(payload.handover_at);
-      if ("created_at" in payload)  payload.created_at  = normalizeDateOnly(payload.created_at);
+      // 2) Dinamički UPDATE (samo poslana polja)
+      const setSql    = cols.map((c,i) => `"${c}" = $${i+1}`).join(", ");
+      const params    = cols.map(c => payload[c]);
+      params.push(id);   // WHERE submission_id
+      params.push(code); // WHERE country_code
 
-      // update preko submission_id i country_code
       const sql = `
         UPDATE leads_import
-        SET
-          email = COALESCE($1, email),
-          phone = COALESCE($2, phone),
-          address = COALESCE($3, address),
-          city = COALESCE($4, city),
-          pickup_city = COALESCE($5, pickup_city),
-          created_at = COALESCE($6, created_at),
-          contacted = COALESCE($7, contacted),
-          handover_at = COALESCE($8, handover_at),
-          days_left = COALESCE($9, days_left),
-          model = COALESCE($10, model),
-          serial = COALESCE($11, serial),
-          note = COALESCE($12, note)
-        WHERE submission_id = $13 AND country_code = $14
-        RETURNING
-          submission_id, email, phone, address, city, pickup_city, created_at, contacted, handover_at, days_left, model, serial, note
+           SET ${setSql}
+         WHERE submission_id = $${cols.length+1}
+           AND country_code  = $${cols.length+2}
+         RETURNING
+           submission_id, first_name, last_name, email, phone, address, city, postal_code,
+           pickup_city, date_contacted, date_handover, model, serial_number, note
       `;
 
-      const vals = [
-        payload.email ?? null,
-        payload.phone ?? null,
-        payload.address ?? null,
-        payload.city ?? null,
-        payload.pickup_city ?? null,
-        payload.created_at ?? null,
-        payload.contacted ?? null,
-        payload.handover_at ?? null,
-        payload.days_left ?? null,
-        payload.model ?? null,
-        payload.serial ?? null,
-        payload.note ?? null,
-        id,
-        code,
-      ];
-
-      const rows = await prisma.$queryRawUnsafe(sql, ...vals);
+      const rows = await prisma.$queryRawUnsafe(sql, ...params);
       if (!rows.length) return res.status(404).json({ error: "Not found" });
 
       return res.json({ ok: true, updated: rows[0] });
