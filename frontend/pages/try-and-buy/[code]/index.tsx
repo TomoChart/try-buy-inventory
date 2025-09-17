@@ -455,6 +455,66 @@ function TryAndBuyPage() {
     }
   };
 
+  // Dodaj helper koji priprema redove za backend
+  function mapRowsForImport(code: string, rows: any[]) {
+    return rows.map((r) => ({
+      country_code: String(code).toUpperCase(),
+      submission_id: r.submission_id ?? null,
+      created_at: r.created_at ?? null,
+      first_name: r.first_name ?? null,
+      last_name: r.last_name ?? null,
+      email: r.email ?? null,
+      phone: r.phone ?? null,
+      address: r.address ?? null,
+      city: r.city ?? null,
+      postal_code: r.postal_code ?? null,
+      pickup_city: r.pickup_city ?? null,
+      // UI koristi "contacted" s vrijednostima "Yes" ili "" (TEXT u bazi)
+      contacted: r.contacted ?? "",
+      handover_at: r.handover_at ?? null,
+      model: r.model ?? null,
+      serial: r.serial ?? null,
+      note: r.note ?? null,
+      // ako u UI postoji boolean returned, pretvori ga u TEXT "Yes"/""
+      return: typeof r.returned === "boolean" ? (r.returned ? "Yes" : "") : (r.return ?? ""),
+      user_feedback: r.feedback ?? r.user_feedback ?? "",
+    }));
+  }
+
+  const onClickImport = async () => {
+    try {
+      if (!parsedRows?.length) { toast.error("Nema redaka za import"); return; }
+
+      const token = getToken();
+      if (!token) { toast.error("Session expired. Login again."); return; }
+
+      const code = String(country).toUpperCase();
+      const payload = {
+        mode: "upsert",
+        rows: mapRowsForImport(code, parsedRows),
+      };
+
+      const res = await fetch(`${API}/admin/galaxy-try/${code}/import?mode=upsert`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const msg = await res.text();
+        throw new Error(msg || `Import failed (${res.status})`);
+      }
+
+      toast.success("Import završen");
+      await load(); // refetch liste nakon importa
+    } catch (e: any) {
+      toast.error(e?.message || "Import failed");
+    }
+  };
+
   return (
     <div
       className="p-6 min-h-screen bg-cover bg-center"
