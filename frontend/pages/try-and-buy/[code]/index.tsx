@@ -146,7 +146,7 @@ type ImportRow = {
 const mapUiToImportRow = (r: TryBuyRecord): ImportRow => {
   const d = (s: string | null) => {
     if (!s) return null;
-    // UI koristi "YYYY-MM-DD"; backend smije primiti ISO @ 00:00Z
+    // UI koristi "YYYY-MM-DD"; backend smije primiti ISO @ 00:00:00Z
     return `${s}T00:00:00.000Z`;
   };
   return {
@@ -410,10 +410,13 @@ function TryAndBuyPage() {
     );
     if (!ids.length) return;
     setData((prev) => prev.filter((r) => !ids.includes(r.submission_id)));
-    fetch(`/api/trybuy/${country}`, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ missionIds: ids }),
+    fetch(`${API}/admin/try-and-buy/${country.toUpperCase()}/delete`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getToken()}`
+      },
+      body: JSON.stringify({ submissionIds: ids }),
     })
       .catch(() => toast.error("Delete failed"))
       .finally(() => setRowSelection({}));
@@ -684,19 +687,9 @@ async function patchTryBuyField(countryCode: string, submissionId: string, field
   if (field === "created_at") {
     payload.created_at = toIsoDateOnlyOrNull((value as string) || null);
   } else if (field === "handover_at") {
-    payload.handover_at = toIsoOrNull((value as string) || null);
+    payload.handover_at = value || null; // value treba biti "YYYY-MM-DD" ili null
   } else if (field === "contacted") {
-    // u UI je "Yes" | "No" | ""; backend prima ISO ili null
-    const v = String(value || "");
-    if (v === "Yes") {
-      const today = new Date();
-      const y = today.getUTCFullYear();
-      const m = String(today.getUTCMonth() + 1).padStart(2, "0");
-      const d = String(today.getUTCDate()).padStart(2, "0");
-      payload.contacted = `${y}-${m}-${d}T00:00:00.000Z`;
-    } else {
-      payload.contacted = null;
-    }
+    payload.contacted = value === "Yes" ? "Yes" : "";
   } else {
     // ostala polja šaljemo kako jesu (prazno -> null)
     payload[field] = (value === "" ? null : value);
