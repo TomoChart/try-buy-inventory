@@ -422,26 +422,37 @@ function TryAndBuyPage() {
     }
   };
 
-  const deleteSelected = () => {
-    const ids = table.getSelectedRowModel().rows.map(
-      (r) => r.original.submission_id
-    );
+  const deleteSelected = async () => {
+    const ids = table.getSelectedRowModel().rows.map(r => r.original.submission_id);
     if (!ids.length) return;
-    setData((prev) => prev.filter((r) => !ids.includes(r.submission_id)));
-    fetch(`${API}/admin/try-and-buy/${country.toUpperCase()}/delete`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`
-      },
-      body: JSON.stringify({ submissionIds: ids }),
-    })
-      .catch(() => toast.error("Delete failed"))
-      .finally(() => {
-        setRowSelection({});
-        // refetch podataka
-        load();
-      });
+
+    // Optimistic UI: makni redove odmah
+    setData(prev => prev.filter(r => !ids.includes(r.submission_id)));
+
+    const token = getToken();
+    const codeUpper = country.toUpperCase();
+
+    try {
+      // Backend očekuje pojedinačni DELETE: /admin/galaxy-try/:code/:submission_id
+      await Promise.all(
+        ids.map(id =>
+          fetch(`${API}/admin/galaxy-try/${codeUpper}/${encodeURIComponent(id)}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          }).then(res => {
+            if (!res.ok && res.status !== 204) {
+              return res.text().then(t => { throw new Error(t || `Delete failed (${res.status})`); });
+            }
+          })
+        )
+      );
+      toast.success("Deleted");
+    } catch (e: any) {
+      toast.error(e?.message || "Delete failed");
+    } finally {
+      setRowSelection({});
+      await load(); // refetch liste
+    }
   };
 
   return (
