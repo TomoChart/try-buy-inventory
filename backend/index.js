@@ -363,13 +363,24 @@ app.patch(
            AND country_code  = $${cols.length + 2}
          RETURNING
            submission_id, first_name, last_name, email, phone, address, city, postal_code,
-           pickup_city, created_at, contacted, handover_at, model, serial, note, "return", user_feedback
+           pickup_city, created_at, contacted, handover_at, model, serial, note,
+           returned AS "returned",
+           user_feedback
       `;
 
       const rows = await prisma.$queryRawUnsafe(sql, ...params);
       if (!rows.length) return res.status(404).json({ error: "Not found" });
 
-      return res.json({ ok: true, updated: rows[0] });
+      const rawUpdated = rows[0] || {};
+      const updated = { ...rawUpdated };
+      if (
+        Object.prototype.hasOwnProperty.call(updated, 'returned') &&
+        !Object.prototype.hasOwnProperty.call(updated, 'return')
+      ) {
+        updated.return = updated.returned;
+      }
+
+      return res.json({ ok: true, updated });
     } catch (e) {
       console.error("PATCH galaxy-try error", e);
       return res.status(500).json({ error: "Update failed" });
