@@ -109,6 +109,29 @@ const normalizeBackendRow = (r: any): TryBuyRecord => {
     return d && !isNaN(d.getTime()) ? toDateString(d) : null;
   };
 
+  const rawReturned =
+    r["returned"] ??
+    r["return"] ??
+    r.returned ??
+    r.return ??
+    r["Returned"] ??
+    r["Return"] ??
+    null;
+
+  const returned = (() => {
+    if (typeof rawReturned === "boolean") return rawReturned;
+    if (typeof rawReturned === "string") {
+      const normalized = rawReturned.trim().toLowerCase();
+      if (!normalized) return false;
+      return ["yes", "y", "1", "true"].includes(normalized);
+    }
+    return Boolean(rawReturned);
+  })();
+
+  const rawFeedback =
+    r["feedback"] ?? r["user_feedback"] ?? r.feedback ?? r.user_feedback ?? "";
+  const feedback = rawFeedback == null ? "" : String(rawFeedback);
+
   return {
     submission_id: r["Submission ID"] ?? r.submission_id ?? "",
     first_name:    r["First Name"]    ?? r.first_name    ?? "",
@@ -125,8 +148,8 @@ const normalizeBackendRow = (r: any): TryBuyRecord => {
     model:         r["Model"]         ?? r.model         ?? "",
     serial:        r["Serial"]        ?? r.serial        ?? "",
     note:          r["Note"]          ?? r.note          ?? "",
-    returned:      Boolean(r.returned),
-    feedback:      r.feedback ?? ""
+    returned,
+    feedback,
   };
 };
 
