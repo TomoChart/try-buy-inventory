@@ -330,10 +330,9 @@ app.patch(
         serial:         "serial",
         note:           "note",
         // dodatno:
-        feedback:       "user_feedback",
         user_feedback:  "user_feedback",
-        returned:       "return",         // UI boolean -> "Yes"/""
-        return:         "return"
+        returned:       "returned",         // UI boolean -> "Yes"/""
+        
       };
 
       // pripremi payload

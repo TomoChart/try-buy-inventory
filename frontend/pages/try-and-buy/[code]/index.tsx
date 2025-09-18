@@ -47,7 +47,7 @@ export interface TryBuyRecord {
   serial: string;
   note: string;
   returned?: boolean;
-  feedback?: string;
+  user_feedback?: string;
 }
 
 const recordSchema = z.object({
@@ -71,7 +71,7 @@ const recordSchema = z.object({
   serial: z.string().optional().or(z.literal("")),
   note: z.string().optional().or(z.literal("")),
   returned: z.boolean().optional(),
-  feedback: z.string().optional().or(z.literal("")),
+  user_feedback: z.string().optional().or(z.literal("")),
 });
 
 const toDateString = (d: Date | null) => {
@@ -126,7 +126,7 @@ const normalizeBackendRow = (r: any): TryBuyRecord => {
     serial:        r["Serial"]        ?? r.serial        ?? "",
     note:          r["Note"]          ?? r.note          ?? "",
     returned:      Boolean(r.returned),
-    feedback:      r.feedback ?? ""
+    user_feedback:     r["User Feedback"] ?? r.user_feedback ?? "",
   };
 };
 
@@ -309,7 +309,7 @@ function TryAndBuyPage() {
         },
         meta: { className: "w-[6ch]" },
       },
-      col("feedback", w30, EditableCell, "user_feedback"),
+      col("user_feedback", w30, EditableCell, "user_feedback"),
     ],
     []
   );
@@ -376,7 +376,7 @@ function TryAndBuyPage() {
         serial: String(r.serial ?? ""),
         note: String(r.note ?? ""),
         returned: false,
-        feedback: "",
+        user_feedback: String(r.user_feedback ?? ""),
       }));
 
       setData((prev) => {
@@ -476,8 +476,8 @@ function TryAndBuyPage() {
       serial: r.serial ?? null,
       note: r.note ?? null,
       // ako u UI postoji boolean returned, pretvori ga u TEXT "Yes"/""
-      return: typeof r.returned === "boolean" ? (r.returned ? "Yes" : "") : (r.return ?? ""),
-      user_feedback: r.feedback ?? r.user_feedback ?? "",
+      returned: typeof r.returned === "boolean" ? (r.returned ? "Yes" : "") : (r.return ?? ""),
+      user_feedback: r.user_feedback ?? "",
     }));
   }
 
