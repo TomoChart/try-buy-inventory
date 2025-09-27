@@ -775,31 +775,46 @@ const toIsoOrNull = (s: string | null) => {
   return isNaN(d.getTime()) ? null : d.toISOString();
 };
 
-/** PATCH jedne izmjene na backend (partial payload) */
 async function patchTryBuyField(countryCode: string, submissionId: string, field: string, value: unknown) {
   const token = getToken();
   if (!token) throw new Error("No token");
 
-  // mapiranje polja iz tablice -> backend očekivanja
-  let payload: any = {};
-  if (field === "created_at") {
-    payload.created_at = toIsoDateOnlyOrNull((value as string) || null);
-  } else if (field === "handover_at") {
-    payload.handover_at = value || null; // value treba biti "YYYY-MM-DD" ili null
-  } else if (field === "contacted") {
-    payload.contacted = value === "Yes" ? "Yes" : "";
-  } else {
-    // ostala polja šaljemo kako jesu (prazno -> null)
-    payload[field] = (value === "" ? null : value);
-  }
+  // UI -> backend key + value mapiranje
+  const mapField = (f: string, v: unknown): { key: string; val: unknown } => {
+    switch (f) {
+      case "feedback":      // UI kolona "feedback" -> DB kolona "user_feedback" (TEXT)
+        return { key: "user_feedback", val: (v ?? "") as string };
+      case "returned":      // UI kolona "returned" -> backend "returned" (boolean OK)
+        return { key: "returned", val: Boolean(v) };
+      case "contacted":     // UI dropdown "Yes" | "" (TEXT u DB)
+        return { key: "contacted", val: (v ?? "") as string };
+      case "handover_at":   // ostavljamo kakav jest (TEXT datum ili "")
+      case "serial":
+      case "model":
+      case "note":
+      case "address":
+      case "city":
+      case "postal_code":
+      case "pickup_city":
+      case "first_name":
+      case "last_name":
+      case "email":
+      case "phone":
+      case "created_at":
+        return { key: f, val: v === "" ? null : v };
+      default:
+        return { key: f, val: v };
+    }
+  };
+
+  const { key, val } = mapField(field, value);
 
   const res = await fetch(`${API}/admin/galaxy-try/${countryCode.toUpperCase()}/${encodeURIComponent(submissionId)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ [key]: val }),
   });
 
-  // backend vraća JSON ili error; 4xx/5xx bacamo s porukom
   let data: any = null;
   try { data = await res.json(); } catch {}
   if (!res.ok) throw new Error((data && (data.error || data.message)) || "Save failed");
