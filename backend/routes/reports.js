@@ -8,7 +8,7 @@ router.get("/weekly", (req, res) => {
     country,
     utilizationPct: 0.0,
     avgQueueDaysByModel: [],
-    counts: { applied: 0, issued: 0, returned: 0 }
+    counts: { applied: 0, issued: 0, finished: 0 }
   });
 });
 

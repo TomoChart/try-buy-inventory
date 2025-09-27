@@ -85,21 +85,38 @@ function GalaxyTryHRPage() {
 
   function normalizeRow(r = {}) {
     const contacted = r.contacted ?? r["Contacted"] ?? r["Contacted At"];
+    const finishedRaw = r.finished ?? r["Finished"] ?? r.returned ?? r["Returned"];
+    const daysLeftRaw = r.days_left ?? r["Days Left"];
+    const daysLeftNum = Number(daysLeftRaw);
+    const toBool = (val) => {
+      if (typeof val === "string") {
+        const normalized = val.trim().toLowerCase();
+        if (!normalized) return false;
+        if (["yes","da","true","1"].includes(normalized)) return true;
+        if (["no","ne","false","0"].includes(normalized)) return false;
+        return true;
+      }
+      return Boolean(val);
+    };
     return {
       submission_id: r.submission_id ?? r["Submission ID"] ?? "",
-      first_name:     r.first_name     ?? r["First Name"]     ?? "",
-      last_name:      r.last_name      ?? r["Last Name"]      ?? "",
-      email:          r.email          ?? r["Email"]          ?? "",
-      phone:          r.phone          ?? r["Phone"]          ?? "",
-      address:        r.address        ?? r["Address"]        ?? "",
-      city:           r.city           ?? r["City"]           ?? "",
-      pickup_city:    r.pickup_city    ?? r["Pickup City"]    ?? "",
-      created_at:     r.created_at     ?? r["Created At"]     ?? "",
-      handover_at:  r.handover_at  ?? r["Handover At"]    ?? "",
-      model:          r.model          ?? r["Model"]          ?? "",
+      country_code:  r.country_code  ?? r["Country Code"]  ?? "",
+      first_name:    r.first_name    ?? r["First Name"]    ?? "",
+      last_name:     r.last_name     ?? r["Last Name"]     ?? "",
+      email:         r.email         ?? r["Email"]         ?? "",
+      phone:         r.phone         ?? r["Phone"]         ?? "",
+      address:       r.address       ?? r["Address"]       ?? "",
+      city:          r.city          ?? r["City"]          ?? "",
+      pickup_city:   r.pickup_city   ?? r["Pickup City"]   ?? "",
+      created_at:    r.created_at    ?? r["Created At"]    ?? "",
+      contacted:     toBool(contacted),
+      handover_at:   r.handover_at   ?? r["Handover At"]   ?? "",
+      days_left:     Number.isFinite(daysLeftNum) ? daysLeftNum : null,
+      model:         r.model         ?? r["Model"]         ?? "",
       serial:        r.serial        ?? r["Serial"]        ?? "",
-      note:           r.note           ?? r["Note"]           ?? "",
-      contacted: Boolean(contacted),
+      note:          r.note          ?? r["Note"]          ?? "",
+      finished:      toBool(finishedRaw),
+      user_feedback: r.user_feedback ?? r["User Feedback"] ?? "",
     };
   }
   async function handleDelete(submissionId) {
@@ -172,8 +189,9 @@ function GalaxyTryHRPage() {
       for (const [k, v] of Object.entries(columnFilters)) {
         if (!v) continue;
         const val =
-          k === "daysLeft" ? String(daysLeft(r.handover_at)) :
+          k === "days_left" ? String(rowDaysLeft(r) ?? "") :
           k === "contacted" ? (r.contacted ? "Yes" : "No") :
+          k === "finished" ? (r.finished ? "Yes" : "No") :
           String(r[k] ?? "");
         if (!val.toLowerCase().includes(String(v).toLowerCase())) return false;
       }
@@ -183,12 +201,15 @@ function GalaxyTryHRPage() {
     const sorted = sort.key
       ? [...filtered].sort((a, b) => {
           let va, vb;
-          if (sort.key === "daysLeft") {
-            va = daysLeft(a.handover_at);
-            vb = daysLeft(b.handover_at);
+          if (sort.key === "days_left") {
+            va = rowDaysLeft(a);
+            vb = rowDaysLeft(b);
           } else if (sort.key === "contacted") {
             va = a.contacted ? 1 : 0;
             vb = b.contacted ? 1 : 0;
+          } else if (sort.key === "finished") {
+            va = a.finished ? 1 : 0;
+            vb = b.finished ? 1 : 0;
           } else {
             va = a[sort.key];
             vb = b[sort.key];
@@ -235,6 +256,8 @@ function GalaxyTryHRPage() {
   }
 
   const columns = [
+    { key: "submission_id", label: "Submission ID" },
+    { key: "country_code", label: "Country Code" },
     { key: "first_name", label: "First Name" },
     { key: "last_name", label: "Last Name" },
     { key: "email", label: "Email" },
@@ -242,13 +265,15 @@ function GalaxyTryHRPage() {
     { key: "address", label: "Address" },
     { key: "city", label: "City" },
     { key: "pickup_city", label: "Pickup City" },
-      { key: "created_at", label: "Created At" },
-      { key: "contacted", label: "Contacted Yes/No" },
-      { key: "handover_at", label: "Handover At" },
-    { key: "daysLeft", label: "Days left" },
+    { key: "created_at", label: "Created At" },
+    { key: "contacted", label: "Contacted Yes/No" },
+    { key: "handover_at", label: "Handover At" },
+    { key: "days_left", label: "Days Left" },
     { key: "model", label: "Model" },
     { key: "serial", label: "Serial" },
     { key: "note", label: "Note" },
+    { key: "finished", label: "Finished Yes/No" },
+    { key: "user_feedback", label: "User Feedback" },
   ];
 
   return (
@@ -356,31 +381,36 @@ function GalaxyTryHRPage() {
               </thead>
               <tbody>
                 {sorted.map(r => {
-                  const left = daysLeft(r.handover_at);
-                  const leftStyle = (left === 0) ? { backgroundColor: "#fee2e2", color: "#991b1b", fontWeight: 600 } : {};
+                  const left = rowDaysLeft(r);
+                  const leftStyle = left === 0 ? { backgroundColor: "#fee2e2", color: "#991b1b", fontWeight: 600 } : {};
                   return (
                     <tr key={r.submission_id}>
                       <td className="p-2"><input type="checkbox" checked={selected.includes(r.submission_id)} onChange={() => toggleSelect(r.submission_id)} /></td>
-                      <td>{r.first_name ?? "-"}</td>
-                      <td>{r.last_name ?? "-"}</td>
-                      <td>{r.email ?? "-"}</td>
-                      <td>{r.phone ?? "-"}</td>
-                      <td>{r.address || "-"}</td>
-                      <td>{r.city || "-"}</td>
-                      <td>{r.pickup_city ?? "-"}</td>
-                      <td>{fmtDateDMY(r.created_at)}</td>
-                      <td className="text-center">
-                        <input
-                          type="checkbox"
-                          checked={r.contacted}
-                          onChange={e => handleContactedChange(r.submission_id, e.target.checked)}
-                        />
-                      </td>
-                      <td>{fmtDateDMY(r.handover_at)}</td>
-                      <td style={leftStyle}>{left === "" ? "" : left}</td>
-                      <td>{r.model ?? "-"}</td>
-                      <td>{r.serial ?? "-"}</td>
-                      <td>{r.note ?? "-"}</td>
+                      {columns.map(col => {
+                        const { key } = col;
+                        if (key === "contacted") {
+                          return (
+                            <td key={key} className="text-center">
+                              <input
+                                type="checkbox"
+                                checked={r.contacted}
+                                onChange={e => handleContactedChange(r.submission_id, e.target.checked)}
+                              />
+                            </td>
+                          );
+                        }
+                        if (key === "created_at" || key === "handover_at") {
+                          return <td key={key}>{fmtDateDMY(r[key])}</td>;
+                        }
+                        if (key === "days_left") {
+                          return <td key={key} style={leftStyle}>{left === "" || left === null ? "" : left}</td>;
+                        }
+                        if (key === "finished") {
+                          return <td key={key} className="text-center">{r.finished ? "Yes" : "No"}</td>;
+                        }
+                        const value = r[key];
+                        return <td key={key}>{value !== undefined && value !== null && value !== "" ? value : "-"}</td>;
+                      })}
                       <td className="p-2 whitespace-nowrap">
                         <button
                           className="px-2 py-1 rounded bg-blue-600 text-white mr-2"
@@ -477,11 +507,19 @@ function daysLeft(handover_at) {
   return 14 - diffDays; // ako je danas = handover → 14
 }
 
+function rowDaysLeft(row) {
+  if (!row) return "";
+  if (row.days_left !== null && row.days_left !== undefined && row.days_left !== "") {
+    return row.days_left;
+  }
+  return daysLeft(row.handover_at);
+}
+
 // --- CSV/XLSX import (auto) ---
 const LEAD_FIELDS = [
   "submission_id","created_at","first_name","last_name","email","phone",
   "address","city","postal_code","pickup_city","contacted",
-  "handover_at","days_left","model","serial","note","form_name",
+  "handover_at","days_left","model","serial","note","finished","user_feedback","form_name",
 ];
 
 const ALIASES = {
@@ -644,6 +682,20 @@ async function handleImportGalaxyCsv(e) {
       if ("model" in r)  o.model = r.model ?? null;
       if ("serial" in r) o.serial = toSerialString(r.serial);            // Galaxy Try = serial
       if ("note" in r)   o.note  = r.note ?? null;
+      if ("finished" in r || "returned" in r) {
+        const val = r.finished ?? r.returned;
+        if (typeof val === "boolean") {
+          o.finished = val ? "Yes" : "";
+        } else if (val == null || val === "") {
+          o.finished = null;
+        } else {
+          const normalized = String(val).trim();
+          if (["yes","da","true","1"].includes(normalized.toLowerCase())) o.finished = "Yes";
+          else if (["no","ne","false","0"].includes(normalized.toLowerCase())) o.finished = "";
+          else o.finished = normalized;
+        }
+      }
+      if ("user_feedback" in r) o.user_feedback = r.user_feedback ?? null;
       if ("form_name" in r) o.form_name = r.form_name ?? null;
       return o;
     }).filter(x => x.submission_id);
@@ -699,12 +751,17 @@ function EditForm({ initial, onCancel, onSaved }) {
     model:          initial.model          || "",
     serial:         initial.serial         || "",
     note:           initial.note           || "",
+    days_left:      initial.days_left === null || initial.days_left === undefined ? "" : String(initial.days_left),
+    finished:       !!initial.finished,
+    user_feedback:  initial.user_feedback || "",
   });
   const [saving, setSaving] = useState(false);
 
   async function save() {
     try {
       setSaving(true);
+      const parsedDays = Number(form.days_left);
+      const normalizedDays = form.days_left === "" ? null : (Number.isFinite(parsedDays) ? parsedDays : null);
       const res = await fetch(`${API}/admin/galaxy-try/hr/${encodeURIComponent(initial.submission_id)}`, {
         method: "PATCH",
         headers: {
@@ -716,6 +773,10 @@ function EditForm({ initial, onCancel, onSaved }) {
           // 👇 normalize created_at to ISO date only
           created_at: onlyDateISO(form.created_at),
           contacted: form.contacted ? new Date().toISOString() : null,
+          handover_at: form.handover_at ? new Date(form.handover_at).toISOString() : null,
+          days_left: normalizedDays,
+          finished: form.finished,
+          user_feedback: form.user_feedback || null,
         })
       });
       const data = await res.json().catch(()=> ({}));
@@ -728,8 +789,8 @@ function EditForm({ initial, onCancel, onSaved }) {
     }
   }
 
-  const Field = ({name,label,type="text"}) => (
-    <label className="text-sm">
+  const Field = ({name,label,type="text",full=false}) => (
+    <label className={`text-sm ${full ? "col-span-2" : ""}`}>
       <div className="mb-1">{label}</div>
       {type === "checkbox" ? (
         <input
@@ -737,6 +798,13 @@ function EditForm({ initial, onCancel, onSaved }) {
           className="border rounded px-2 py-1"
           checked={form[name] ?? false}
           onChange={e => setForm(s => ({...s, [name]: e.target.checked}))}
+        />
+      ) : type === "textarea" ? (
+        <textarea
+          className="border rounded px-2 py-1 w-full"
+          rows={4}
+          value={form[name] ?? ""}
+          onChange={e => setForm(s => ({...s, [name]: e.target.value}))}
         />
       ) : (
         <input
@@ -762,9 +830,12 @@ function EditForm({ initial, onCancel, onSaved }) {
         <Field name="created_at"  label="Created At"  type="date" />
         <Field name="contacted" label="Contacted Yes/No" type="checkbox" />
         <Field name="handover_at"  label="Handover At"  type="date" />
+        <Field name="days_left" label="Days Left" type="number" />
+        <Field name="finished" label="Finished" type="checkbox" />
         <Field name="model"          label="Model" />
         <Field name="serial"  label="Serial" />
-        <Field name="note"           label="Note" />
+        <Field name="note"           label="Note" type="textarea" full />
+        <Field name="user_feedback" label="User Feedback" type="textarea" full />
       </div>
       <div className="mt-4 flex justify-end gap-2">
         <button className="px-3 py-1 border rounded" onClick={onCancel}>Cancel</button>
@@ -786,13 +857,20 @@ function EditForm({ initial, onCancel, onSaved }) {
       address: "", city: "", pickup_city: "",
       contacted: false, handover_at: "",
       model: "", serial: "", note: "",
-      created_at: ""
+      created_at: "",
+      days_left: "",
+      finished: false,
+      user_feedback: "",
     });
     const [saving, setSaving] = useState(false);
 
   async function save() {
     try {
       setSaving(true);
+      const parsedDays = Number(form.days_left);
+      const normalizedDays = form.days_left === "" ? null : (Number.isFinite(parsedDays) ? parsedDays : null);
+      const createdAtIso = onlyDateISO(form.created_at);
+      const handoverIso = form.handover_at ? new Date(form.handover_at).toISOString() : null;
       const res = await fetch(`${API}/admin/galaxy-try/hr`, {
         method: "POST",
         headers: {
@@ -802,6 +880,11 @@ function EditForm({ initial, onCancel, onSaved }) {
         body: JSON.stringify({
           ...form,
           contacted: form.contacted ? new Date().toISOString() : null,
+          created_at: createdAtIso,
+          handover_at: handoverIso,
+          days_left: normalizedDays,
+          finished: form.finished,
+          user_feedback: form.user_feedback || null,
         })
       });
       const data = await res.json().catch(()=> ({}));
@@ -814,8 +897,8 @@ function EditForm({ initial, onCancel, onSaved }) {
     }
   }
 
-  const Field = ({name,label,type="text"}) => (
-    <label className="text-sm">
+  const Field = ({name,label,type="text",full=false}) => (
+    <label className={`text-sm ${full ? "col-span-2" : ""}`}>
       <div className="mb-1">{label}</div>
       {type === "checkbox" ? (
         <input
@@ -823,6 +906,13 @@ function EditForm({ initial, onCancel, onSaved }) {
           className="border rounded px-2 py-1"
           checked={form[name] ?? false}
           onChange={e => setForm(s => ({...s, [name]: e.target.checked}))}
+        />
+      ) : type === "textarea" ? (
+        <textarea
+          className="border rounded px-2 py-1 w-full"
+          rows={4}
+          value={form[name] ?? ""}
+          onChange={e => setForm(s => ({...s, [name]: e.target.value}))}
         />
       ) : (
         <input
@@ -848,9 +938,12 @@ function EditForm({ initial, onCancel, onSaved }) {
         <Field name="created_at"  label="Created At"  type="date" />
         <Field name="contacted" label="Contacted Yes/No" type="checkbox" />
         <Field name="handover_at"  label="Handover At"  type="date" />
+        <Field name="days_left" label="Days Left" type="number" />
+        <Field name="finished" label="Finished" type="checkbox" />
         <Field name="model"          label="Model" />
         <Field name="serial"  label="Serial" />
-        <Field name="note"           label="Note" />
+        <Field name="note"           label="Note" type="textarea" full />
+        <Field name="user_feedback" label="User Feedback" type="textarea" full />
       </div>
 
       <div className="mt-4 flex justify-end gap-2">
