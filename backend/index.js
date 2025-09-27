@@ -448,8 +448,8 @@ app.patch('/admin/galaxy-try/:code/:submission_id',
           model            AS "Model",
           serial          AS "Serial",
           note             AS "Note",
-          user_feedback   AS "User Feedback",
-          finished         AS "Finished"
+          finished         AS "Finished",
+          user_feedback   AS "User Feedback"
       `;
       const rows = await prisma.$queryRawUnsafe(sql, ...params);
       if (!rows.length) return res.status(404).json({ error: 'Not found' });
@@ -691,7 +691,7 @@ app.post('/admin/galaxy-try/hr/import',
         }
 
         // Normalizacija ulaza
-        const finishedRaw = r.finished ?? r.returned;
+        const finishedRaw = r.finished;
         const p = {
           first_name:  strOrNull(r.first_name),
           last_name:   strOrNull(r.last_name),
@@ -782,87 +782,158 @@ app.post('/admin/galaxy-try/hr/import',
 );
 
 
-// 6) start server
-const PORT = Number(process.env.PORT || 8080);
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`API listening on http://0.0.0.0:${PORT}`);
-});
-
-// (opcionalno za testove)
-module.exports = app;
-
-// === CREATE USER (admin creates operator/country_admin) ===
-// STARI PATH: app.post('/admin/users', ...)
-// NOVI PATH:
-app.post('/adminusers',
-  requireAuth,
-  requireRole('superadmin','country_admin'),
+// === TRY-AND-BUY: Import (CSV/XLSX) — upsert s created_at + normalizacija ===
+app.post('/admin/try-and-buy/hr/import',
+  requireAuth, requireRole('country_admin','superadmin'),
   async (req, res) => {
     try {
-      let { email, password, role, countryId } = req.body || {};
-      email = String(email || '').trim().toLowerCase();
-      role = String(role || 'OPERATOR').toUpperCase();
-
-      if (!email || !password) {
-        return res.status(400).json({ error: 'Missing email or password' });
-      }
-      if (!['OPERATOR','COUNTRY_ADMIN'].includes(role)) {
-        return res.status(400).json({ error: 'Invalid role' });
+      const { rows } = req.body || {};
+      if (!Array.isArray(rows) || !rows.length) {
+        return res.status(400).json({ error: 'No rows provided' });
       }
 
-      // Ako je caller country_admin, prisilno vežemo na njegovu zemlju
-      const caller = req.user || {};
-      const callerRole = String(caller.role || '').toUpperCase();
-      if (callerRole === 'COUNTRY_ADMIN') {
-        if (!caller.countryId) {
-          return res.status(403).json({ error: 'Caller has no country bound' });
+      const isoOrNull = (v) => {
+        if (v == null || v === '') return null;
+        const d = new Date(v);
+        return isNaN(d) ? null : d.toISOString();
+      };
+      const numOrNull = (v) => (v === '' || v == null ? null : Number.isFinite(Number(v)) ? Number(v) : null);
+      const strOrNull = (v) => {
+        if (v == null) return null;
+        const s = String(v).trim();
+        return s === '' ? null : s;
+      };
+      const serialStr = (v) => {
+        if (v == null) return null;
+        const s = String(v).trim().replace(/\s+/g, '');
+        return s === '' ? null : s;
+      };
+
+
+      let upserted = 0;
+
+      for (const r of rows) {
+        if (!r.submission_id) continue;
+
+        // === Normalize created_at, contacted, handover_at ===
+        if (r.created_at) {
+          let d = String(r.created_at);
+          if (d.includes(' ')) d = d.split(' ')[0];
+          if (/^\d{2}-\d{2}-\d{4}$/.test(d)) {
+            const [day, mon, yr] = d.split('-');
+            d = `${yr}-${mon}-${day}`;
+          }
+          r.created_at = new Date(`${d}T00:00:00Z`);
         }
-        countryId = caller.countryId;
-      } else {
-        if (role !== 'SUPERADMIN' && !countryId) {
-          return res.status(400).json({ error: 'countryId is required for non-superadmin users' });
+    
+        
+        if (r.handover_at) {
+          let d = String(r.handover_at);
+          if (d.includes(' ')) d = d.split(' ')[0];
+          if (/^\d{2}-\d{2}-\d{4}$/.test(d)) {
+            const [day, mon, yr] = d.split('-');
+            d = `${yr}-${mon}-${day}`;
+          }
+          r.handover_at = new Date(`${d}T00:00:00Z`);
         }
+
+        // Normalizacija ulaza
+        const finishedRaw = r.finished;
+        const p = {
+          first_name:  strOrNull(r.first_name),
+          last_name:   strOrNull(r.last_name),
+          email:       strOrNull(r.email),
+          phone:       strOrNull(r.phone),
+          address:     strOrNull(r.address),
+          city:        strOrNull(r.city),
+          pickup_city: strOrNull(r.pickup_city),
+          created_at:  isoOrNull(r.created_at),   // ⇐ NOVO
+          contacted:   isoOrNull(r.contacted),
+          handover_at: isoOrNull(r.handover_at),
+          days_left:   numOrNull(r.days_left),
+          model:       strOrNull(r.model),
+          serial:      serialStr(r.serial),
+          note:        strOrNull(r.note),
+          user_feedback:        strOrNull(r.user_feedback),
+          finished:  typeof finishedRaw === 'boolean'
+            ? (finishedRaw ? 'Yes' : '')
+            : strOrNull(finishedRaw)
+        };
+
+        // UPDATE (uključuje created_at)
+        const qU = `
+          UPDATE leads_import SET
+            first_name  = COALESCE($2, first_name),
+            last_name   = COALESCE($3, last_name),
+            email       = COALESCE($4, email),
+            phone       = COALESCE($5, phone),
+            address     = COALESCE($6, address),
+            city        = COALESCE($7, city),
+            pickup_city = COALESCE($8, pickup_city),
+            created_at  = COALESCE($9, created_at),
+            contacted   = COALESCE($10, contacted),
+            handover_at = COALESCE($11, handover_at),
+            days_left   = COALESCE($12, days_left),
+            model       = COALESCE($13, model),
+            serial      = COALESCE($14, serial),
+          note        = COALESCE($15, note),
+          finished    = COALESCE($16, finished),
+          user_feedback        = COALESCE($17, user_feedback),
+                       
+            updated_at  = NOW()
+          WHERE submission_id = $1 AND country_code = 'HR'
+        `;
+        const vU = [
+          r.submission_id,
+          p.first_name, p.last_name, p.email, p.phone,
+          p.address, p.city, p.pickup_city,
+          p.created_at, p.contacted, p.handover_at,
+          p.days_left, p.model, p.serial, p.note, p.finished, p.user_feedback
+        ];
+        const updated = await prisma.$executeRawUnsafe(qU, ...vU);
+
+        // INSERT ako ne postoji (s created_at)
+        if (!updated) {
+          const qI = `
+            INSERT INTO leads_import (
+              submission_id, country_code,
+              first_name,last_name,email,phone,address,city,pickup_city,
+              created_at,contacted,handover_at,days_left,model,serial,note,finished,user_feedback,
+              updated_at
+            ) VALUES (
+              $1,'HR',
+              $2,$3,$4,$5,$6,$7,$8,
+              $9,$10,$11,$12,$13,$14,$15,$16,$17,
+              NOW()
+            )
+          `;
+          const vI = [
+            r.submission_id,
+            p.first_name, p.last_name, p.email, p.phone,
+            p.address, p.city, p.pickup_city,
+            p.created_at, p.contacted, p.handover_at,
+            p.days_left, p.model, p.serial, p.note, p.finished, p.user_feedback
+          ];
+          await prisma.$executeRawUnsafe(qI, ...vI);
+        }
+
+        upserted++;
       }
 
-      const exists = await prisma.user.findUnique({ where: { email } });
-      if (exists) {
-        return res.status(409).json({ error: 'Email already exists' });
-      }
-
-      const passwordHash = await bcrypt.hash(password, 10);
-
-      const created = await prisma.user.create({
-        data: {
-          email,
-          passwordHash,
-          role,                 // "OPERATOR" | "COUNTRY_ADMIN"
-          countryId: countryId ?? null,
-        },
-        select: { id: true, email: true, role: true, countryId: true, createdAt: true }
-      });
-
-      return res.status(201).json({ user: created });
-    } catch (err) {
-      console.error('POST /adminusers error', err);
-      return res.status(500).json({ error: 'Server error.' });
+      return res.json({ upserted, mode: 'upsert' });
+    } catch (e) {
+      console.error('Import error', e);
+      return res.status(500).json({ error: 'Import error' });
     }
   }
 );
 
-// Dodaj helper na vrh (npr. uz ostale helper funkcije)
-function normalizeDateOnly(input) {
-  if (input == null || input === "") return null;
-  let s = String(input);
-  // odbaci vrijeme ako postoji (npr. "YYYY-MM-DD HH:MM:SS" ili ISO)
-  if (s.includes(" ")) s = s.split(" ")[0];
-  else if (s.includes("T")) s = s.split("T")[0];
-  // "DD-MM-YYYY" → "YYYY-MM-DD"
-  if (/^\d{2}-\d{2}-\d{4}$/.test(s)) {
-    const [d, m, y] = s.split("-");
-    s = `${y}-${m}-${d}`;
-  }
-  // vrati Date na 00:00:00Z
-  return new Date(`${s}T00:00:00Z`);
+// helper funkcija koja vraća samo datum u ISO formatu ("YYYY-MM-DD")
+function onlyDateISO(input) {
+  if (!input) return null;
+  const d = new Date(input);
+  if (isNaN(d)) return null;
+  return d.toISOString().slice(0, 10); // "YYYY-MM-DD"
 }
 
 // ===== GALAXY TRY: generička LISTA po country code =====
@@ -1264,7 +1335,7 @@ app.post('/admin/try-and-buy/hr/import',
         }
 
         // Normalizacija ulaza
-        const finishedRaw = r.finished ?? r.returned;
+        const finishedRaw = r.finished;
         const p = {
           first_name:  strOrNull(r.first_name),
           last_name:   strOrNull(r.last_name),
@@ -1280,10 +1351,10 @@ app.post('/admin/try-and-buy/hr/import',
           model:       strOrNull(r.model),
           serial:      serialStr(r.serial),
           note:        strOrNull(r.note),
-          finished:      typeof finishedRaw === 'boolean'
+          user_feedback:        strOrNull(r.user_feedback),
+          finished:  typeof finishedRaw === 'boolean'
             ? (finishedRaw ? 'Yes' : '')
             : strOrNull(finishedRaw),
-          user_feedback:        strOrNull(r.user_feedback),
         };
 
         // UPDATE (uključuje created_at)
@@ -1352,11 +1423,3 @@ app.post('/admin/try-and-buy/hr/import',
     }
   }
 );
-
-// helper funkcija koja vraća samo datum u ISO formatu ("YYYY-MM-DD")
-function onlyDateISO(input) {
-  if (!input) return null;
-  const d = new Date(input);
-  if (isNaN(d)) return null;
-  return d.toISOString().slice(0, 10); // "YYYY-MM-DD"
-}
