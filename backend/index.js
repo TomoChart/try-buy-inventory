@@ -388,7 +388,7 @@ app.patch('/admin/galaxy-try/:code/:submission_id',
         'first_name','last_name','email','phone',
         'address','city','pickup_city','created_at',
         'contacted','handover_at','days_left',
-        'model','serial','note'
+        'model','serial','note','user_feedback','returned'
       ]);
 
          // zadrži samo dozvoljena polja koja su poslana
