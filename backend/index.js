@@ -313,33 +313,32 @@ app.patch(
 
       const raw = req.body ?? {};
 
-      // UI -> DB mapiranja (tvoje kolone su TEXT):
+      // UI -> DB mapiranja (točno prema tvojoj tablici - sve TEXT):
       const mapUiToDb = {
-        first_name:     "first_name",
-        last_name:      "last_name",
-        email:          "email",
-        phone:          "phone",
-        address:        "address",
-        city:           "city",
-        postal_code:    "postal_code",
-        pickup_city:    "pickup_city",
-        created_at:     "created_at",
-        contacted:      "contacted",      // "Yes" | "" (TEXT)
-        handover_at:    "handover_at",
-        model:          "model",
-        serial:         "serial",
-        note:           "note",
-        // dodatno:
-        user_feedback:  "user_feedback",
-        returned:       "returned",         // UI boolean -> "Yes"/""
-        
+        submission_id: "submission_id",
+        first_name:    "first_name",
+        last_name:     "last_name",
+        email:         "email",
+        phone:         "phone",
+        address:       "address",
+        city:          "city",
+        postal_code:   "postal_code",
+        pickup_city:   "pickup_city",
+        created_at:    "created_at",
+        contacted:     "contacted",      // "Yes" ili ""
+        handover_at:   "handover_at",
+        model:         "model",
+        serial:        "serial",
+        note:          "note",
+        user_feedback: "user_feedback",
+        returned:      "returned",       // boolean u UI -> "Yes"/""
       };
 
-      // pripremi payload
+      // pripremi payload (prazno -> NULL; returned boolean -> "Yes"/"")
       const payload = {};
       for (const [uiKey, dbKey] of Object.entries(mapUiToDb)) {
         if (!(uiKey in raw)) continue;
-        if (uiKey === "returned") {
+        if (uiKey === "returned" && typeof raw.returned === "boolean") {
           payload[dbKey] = raw.returned ? "Yes" : "";
         } else {
           payload[dbKey] = raw[uiKey] === "" ? null : raw[uiKey];
@@ -347,9 +346,7 @@ app.patch(
       }
 
       const cols = Object.keys(payload);
-      if (!cols.length) {
-        return res.status(400).json({ error: "No editable fields provided" });
-      }
+      if (!cols.length) return res.status(400).json({ error: "No editable fields provided" });
 
       // dinamički UPDATE samo poslanih polja
       const setSql = cols.map((c, i) => `"${c}" = $${i + 1}`).join(", ");
@@ -363,12 +360,12 @@ app.patch(
            AND country_code  = $${cols.length + 2}
          RETURNING
            submission_id, first_name, last_name, email, phone, address, city, postal_code,
-           pickup_city, created_at, contacted, handover_at, model, serial, note, "return", user_feedback
+           pickup_city, created_at, contacted, handover_at, model, serial, note,
+           user_feedback, returned
       `;
 
       const rows = await prisma.$queryRawUnsafe(sql, ...params);
       if (!rows.length) return res.status(404).json({ error: "Not found" });
-
       return res.json({ ok: true, updated: rows[0] });
     } catch (e) {
       console.error("PATCH galaxy-try error", e);
@@ -376,7 +373,6 @@ app.patch(
     }
   }
 );
-
 // === GALAXY TRY: EDIT (PATCH) po submission_id i country code ===
 app.patch('/admin/galaxy-try/:code/:submission_id',
   requireAuth, requireRole('country_admin','superadmin'),
