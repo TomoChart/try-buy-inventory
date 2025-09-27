@@ -445,7 +445,9 @@ app.patch('/admin/galaxy-try/:code/:submission_id',
           days_left       AS "Days Left",
           model            AS "Model",
           serial          AS "Serial",
-          note             AS "Note"
+          note             AS "Note",
+          user_feedback   AS "User Feedback",
+          returned         AS "Returned"          
       `;
       const rows = await prisma.$queryRawUnsafe(sql, ...params);
       if (!rows.length) return res.status(404).json({ error: 'Not found' });
@@ -471,7 +473,7 @@ app.post('/admin/galaxy-try/:code',
         'first_name','last_name','email','phone',
         'address','city','pickup_city',
         'created_at','contacted','handover_at','days_left',
-        'model','serial','note'
+        'model','serial','note','user_feedback','returned'
       ]);
 
       const b = req.body || {};
@@ -524,7 +526,9 @@ app.post('/admin/galaxy-try/:code',
           days_left            AS days_left,
           model                AS model,
           serial               AS serial,
-          note                 AS note
+          note                 AS note,
+          user_feedback   AS user_feedback,
+          returned         AS returned
       `;
       const rows = await prisma.$queryRawUnsafe(sql, ...vals);
       return res.json({ ok: true, item: rows[0] });
@@ -602,6 +606,8 @@ app.get('/admin/galaxy-try/:code/list',
           model            AS "Model",
           serial          AS "Serial",
           note             AS "Note"
+          user_feedback    AS "User Feedback",
+          returned        AS "Returned"
         FROM leads_import
         WHERE country_code = $1
         ORDER BY created_at DESC NULLS LAST, submission_id DESC
@@ -686,6 +692,8 @@ app.post('/admin/galaxy-try/hr/import',
           model:       strOrNull(r.model),
           serial:      serialStr(r.serial),
           note:        strOrNull(r.note),
+          user_feedback:        strOrNull(r.user_feedback),
+          returned:  strOrNull(r.returned)
         };
 
         // UPDATE (uključuje created_at)
@@ -705,6 +713,9 @@ app.post('/admin/galaxy-try/hr/import',
             model       = COALESCE($13, model),
             serial      = COALESCE($14, serial),
             note        = COALESCE($15, note),
+            returned        = COALESCE($16, note),
+            user_feedback        = COALESCE($17, user_feedback),
+                       
             updated_at  = NOW()
           WHERE submission_id = $1 AND country_code = 'HR'
         `;
@@ -713,7 +724,7 @@ app.post('/admin/galaxy-try/hr/import',
           p.first_name, p.last_name, p.email, p.phone,
           p.address, p.city, p.pickup_city,
           p.created_at, p.contacted, p.handover_at,
-          p.days_left, p.model, p.serial, p.note
+          p.days_left, p.model, p.serial, p.note, p.returned, p.user_feedback
         ];
         const updated = await prisma.$executeRawUnsafe(qU, ...vU);
 
@@ -723,7 +734,7 @@ app.post('/admin/galaxy-try/hr/import',
             INSERT INTO leads_import (
               submission_id, country_code,
               first_name,last_name,email,phone,address,city,pickup_city,
-              created_at,contacted,handover_at,days_left,model,serial,note,
+              created_at,contacted,handover_at,days_left,model,serial,note,returned,user_feedback,
               updated_at
             ) VALUES (
               $1,'HR',
@@ -737,7 +748,7 @@ app.post('/admin/galaxy-try/hr/import',
             p.first_name, p.last_name, p.email, p.phone,
             p.address, p.city, p.pickup_city,
             p.created_at, p.contacted, p.handover_at,
-            p.days_left, p.model, p.serial, p.note
+            p.days_left, p.model, p.serial, p.note, p.returned, p.user_feedback
           ];
           await prisma.$executeRawUnsafe(qI, ...vI);
         }
@@ -895,7 +906,7 @@ app.get('/admin/try-and-buy/:code/list',
           model                            AS model,
           serial                           AS serial,
           note                             AS note,
-          return                           AS return,
+          returned                           AS returned,
           user_feedback                    AS user_feedback
         FROM public.leads_import
         WHERE country_code = $1
@@ -912,7 +923,7 @@ app.get('/admin/try-and-buy/:code/list',
 
 // === TRY-AND-BUY: PATCH po submission_id i country code ===
 // PATCH /admin/try-and-buy/:code/:submission_id
-// Body: { email?, phone?, address?, city?, pickup_city?, created_at?, contacted?, handover_at?, days_left?, model?, serial?, note? }
+// Body: { email?, phone?, address?, city?, pickup_city?, created_at?, contacted?, handover_at?, days_left?, model?, serial?, note?, returned?, user_feedback? }
 app.patch(
   '/admin/try-and-buy/:code/:submission_id',
   requireAuth, requireRole('country_admin','superadmin'),
@@ -927,7 +938,7 @@ app.patch(
       const ALLOWED = new Set([
         'email','phone','address','city','pickup_city',
         'created_at','contacted','handover_at','days_left',
-        'model','serial','note'
+        'model','serial','note','returned','user_feedback'
       ]);
 
          // zadrži samo dozvoljena polja koja su poslana
@@ -984,7 +995,9 @@ app.patch(
           days_left       AS "Days Left",
           model            AS "Model",
           serial          AS "Serial",
-          note             AS "Note"
+          note             AS "Note",
+          returned         AS "Returned",
+          user_feedback   AS "User Feedback"
       `;
       const rows = await prisma.$queryRawUnsafe(sql, ...params);
       if (!rows.length) return res.status(404).json({ error: 'Not found' });
@@ -998,7 +1011,7 @@ app.patch(
 
 // === TRY-AND-BUY: CREATE (upsert) po country code (HR/SI/RS) ===
 // POST /admin/try-and-buy/:code
-// Body: { submission_id?, email, phone, address, city, pickup_city, created_at, contacted, handover_at, days_left, model, serial, note }
+// Body: { submission_id?, email, phone, address, city, pickup_city, created_at, contacted, handover_at, days_left, model, serial, note, returned, user_feedback }
 app.post(
   '/admin/try-and-buy/:code',
   requireAuth, requireRole('country_admin','superadmin'),
@@ -1013,7 +1026,7 @@ app.post(
       const ALLOWED = new Set([
         'submission_id','email','phone','address','city','pickup_city',
         'created_at','contacted','handover_at','days_left',
-        'model','serial','note'
+        'model','serial','note','returned','user_feedback'
       ]);
 
       const b = req.body || {};
@@ -1066,7 +1079,9 @@ app.post(
           days_left            AS days_left,
           model                AS model,
           serial               AS serial,
-          note                 AS note
+          note                 AS note,
+          returned         AS returned,
+          user_feedback   AS user_feedback
       `;
       const rows = await prisma.$queryRawUnsafe(sql, ...vals);
       return res.json({ ok: true, item: rows[0] });
@@ -1141,7 +1156,9 @@ app.get('/admin/try-and-buy/:code/list',
           handover_at      AS "Handover At",
           model            AS "Model",
           serial          AS "Serial",
-          note             AS "Note"
+          note             AS "Note",
+          returned        AS "Returned",
+          user_feedback    AS "User Feedback"
         FROM leads_import
         WHERE country_code = $1
         ORDER BY created_at DESC NULLS LAST, submission_id DESC
@@ -1226,6 +1243,8 @@ app.post('/admin/try-and-buy/hr/import',
           model:       strOrNull(r.model),
           serial:      serialStr(r.serial),
           note:        strOrNull(r.note),
+          returned:        strOrNull(r.returned),
+          user_feedback:        strOrNull(r.user_feedback),
         };
 
         // UPDATE (uključuje created_at)
@@ -1245,6 +1264,8 @@ app.post('/admin/try-and-buy/hr/import',
             model       = COALESCE($13, model),
             serial      = COALESCE($14, serial),
             note        = COALESCE($15, note),
+            returned        = COALESCE($16, returned),
+            user_feedback        = COALESCE($17, user_feedback),
             updated_at  = NOW()
           WHERE submission_id = $1 AND country_code = 'HR'
         `;
@@ -1253,7 +1274,7 @@ app.post('/admin/try-and-buy/hr/import',
           p.first_name, p.last_name, p.email, p.phone,
           p.address, p.city, p.pickup_city,
           p.created_at, p.contacted, p.handover_at,
-          p.days_left, p.model, p.serial, p.note
+          p.days_left, p.model, p.serial, p.note, p.returned, p.user_feedback
         ];
         const updated = await prisma.$executeRawUnsafe(qU, ...vU);
 
@@ -1263,7 +1284,7 @@ app.post('/admin/try-and-buy/hr/import',
             INSERT INTO leads_import (
               submission_id, country_code,
               first_name,last_name,email,phone,address,city,pickup_city,
-              created_at,contacted,handover_at,days_left,model,serial,note,
+              created_at,contacted,handover_at,days_left,model,serial,note,returned,user_feedback
               updated_at
             ) VALUES (
               $1,'HR',
@@ -1277,7 +1298,7 @@ app.post('/admin/try-and-buy/hr/import',
             p.first_name, p.last_name, p.email, p.phone,
             p.address, p.city, p.pickup_city,
             p.created_at, p.contacted, p.handover_at,
-            p.days_left, p.model, p.serial, p.note
+            p.days_left, p.model, p.serial, p.note, p.returned, p.user_feedback
           ];
           await prisma.$executeRawUnsafe(qI, ...vI);
         }
