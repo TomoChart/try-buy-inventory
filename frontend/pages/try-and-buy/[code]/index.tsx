@@ -46,7 +46,7 @@ export interface TryBuyRecord {
   model: "Fold7" | "Watch8" | "";
   serial: string;
   note: string;
-  returned?: boolean;
+  finished?: boolean;
   user_feedback?: string;
 }
 
@@ -70,7 +70,7 @@ const recordSchema = z.object({
   model: z.enum(["Fold7", "Watch8", ""]).default(""),
   serial: z.string().optional().or(z.literal("")),
   note: z.string().optional().or(z.literal("")),
-  returned: z.boolean().optional(),
+  finished: z.boolean().optional(),
   user_feedback: z.string().optional().or(z.literal("")),
 });
 
@@ -92,8 +92,8 @@ const parseDateString = (s: string | null) => {
   return null;
 };
 
-const calcDaysLeft = (handover: string | null, returned?: boolean) => {
-  if (!handover || returned) return "";
+const calcDaysLeft = (handover: string | null, finished?: boolean) => {
+  if (!handover || finished) return "";
   const d = parseDateString(handover);
   if (!d) return "";
   const diff = Math.floor((Date.now() - d.getTime()) / 86400000);
@@ -125,7 +125,7 @@ const normalizeBackendRow = (r: any): TryBuyRecord => {
     model:         r["Model"]         ?? r.model         ?? "",
     serial:        r["Serial"]        ?? r.serial        ?? "",
     note:          r["Note"]          ?? r.note          ?? "",
-    returned:      Boolean(r.returned),
+    finished:      Boolean(r.finished ?? r.returned),
     user_feedback:     r["User Feedback"] ?? r.user_feedback ?? "",
   };
 };
@@ -141,6 +141,8 @@ type ImportRow = {
   model?: string | null;
   serial?: string | null;
   note?: string | null;
+  finished?: string | null;
+  user_feedback?: string | null;
 };
 
 const mapUiToImportRow = (r: TryBuyRecord): ImportRow => {
@@ -149,6 +151,13 @@ const mapUiToImportRow = (r: TryBuyRecord): ImportRow => {
     // UI koristi "YYYY-MM-DD"; backend smije primiti ISO @ 00:00:00Z
     return `${s}T00:00:00.000Z`;
   };
+  const finishedRaw = (r as any).finished ?? (r as any).returned;
+  const finished =
+    typeof finishedRaw === "boolean"
+      ? finishedRaw ? "Yes" : ""
+      : typeof finishedRaw === "string"
+        ? finishedRaw.trim() || null
+        : null;
   return {
     submission_id: r.submission_id || null,
     email: r.email || null,
@@ -159,6 +168,8 @@ const mapUiToImportRow = (r: TryBuyRecord): ImportRow => {
     model: r.model || null,
     serial: r.serial || null,
     note: r.note || null,
+    finished,
+    user_feedback: r.user_feedback || null,
   };
 };
 
@@ -276,20 +287,20 @@ function TryAndBuyPage() {
       col("created_at", w12, DateCell),
       col("contacted", w12, SelectCell(["", "Yes", "No"])),
       col("handover_at", w12, DateCell),
-      {
+      { 
         id: "days_left",
         header: ({ column }) => <ColumnHeader column={column} title="days_left" />,
         cell: ({ row }) =>
-          calcDaysLeft(row.original.handover_at, row.original.returned),
+          calcDaysLeft(row.original.handover_at, row.original.finished),
         meta: { className: "w-[6ch]" },
       },
       col("model", w12, SelectCell(["", "Fold7", "Watch8"])),
       col("serial", w12),
       col("note", w22),
-      {
-        accessorKey: "returned",
+      { 
+        accessorKey: "finished",
         header: ({ column }) => (
-          <ColumnHeader column={column} title="returned" />
+          <ColumnHeader column={column} title="finished" />
         ),
         cell: ({ getValue, row, column, table }) => {
           const v = getValue() as boolean | undefined;
@@ -375,7 +386,7 @@ function TryAndBuyPage() {
         model: r.model === "Fold7" || r.model === "Watch8" ? r.model : "",
         serial: String(r.serial ?? ""),
         note: String(r.note ?? ""),
-        returned: false,
+        finished: false,
         user_feedback: String(r.user_feedback ?? ""),
       }));
 
@@ -475,8 +486,8 @@ function TryAndBuyPage() {
       model: r.model ?? null,
       serial: r.serial ?? null,
       note: r.note ?? null,
-      // ako u UI postoji boolean returned, pretvori ga u TEXT "Yes"/""
-      returned: typeof r.returned === "boolean" ? (r.returned ? "Yes" : "") : (r.return ?? ""),
+      // ako u UI postoji boolean finished, pretvori ga u TEXT "Yes"/""
+      finished: typeof r.finished === "boolean" ? (r.finished ? "Yes" : "") : (r.finished ?? r.return ?? ""),
       user_feedback: r.user_feedback ?? "",
     }));
   }
@@ -573,10 +584,10 @@ function TryAndBuyPage() {
           <tbody>
             {table.getRowModel().rows.map((row) => {
               const left = Number(
-                calcDaysLeft(row.original.handover_at, row.original.returned)
+                calcDaysLeft(row.original.handover_at, row.original.finished)
               );
               let rowClass = "";
-              if (row.original.returned) rowClass = "bg-blue-200";
+              if (row.original.finished) rowClass = "bg-blue-200";
               else if (left === 1) rowClass = "bg-yellow-200";
               else if (left <= 0 && row.original.handover_at)
                 rowClass = "bg-red-200";
@@ -784,8 +795,8 @@ async function patchTryBuyField(countryCode: string, submissionId: string, field
     switch (f) {
       case "feedback":      // UI kolona "feedback" -> DB kolona "user_feedback" (TEXT)
         return { key: "user_feedback", val: (v ?? "") as string };
-      case "returned":      // UI kolona "returned" -> backend "returned" (boolean OK)
-        return { key: "returned", val: Boolean(v) };
+      case "finished":      // UI kolona "finished" -> backend "finished" (boolean OK)
+        return { key: "finished", val: Boolean(v) };
       case "contacted":     // UI dropdown "Yes" | "" (TEXT u DB)
         return { key: "contacted", val: (v ?? "") as string };
       case "handover_at":   // ostavljamo kakav jest (TEXT datum ili "")
