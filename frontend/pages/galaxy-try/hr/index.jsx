@@ -85,7 +85,7 @@ function GalaxyTryHRPage() {
 
   function normalizeRow(r = {}) {
     const contacted = r.contacted ?? r["Contacted"] ?? r["Contacted At"];
-    const finishedRaw = r.finished ?? r["Finished"] ?? r.returned ?? r["Returned"];
+    const finishedRaw = r.finished ?? r["Finished"];
     const daysLeftRaw = r.days_left ?? r["Days Left"];
     const daysLeftNum = Number(daysLeftRaw);
     const toBool = (val) => {
@@ -682,8 +682,8 @@ async function handleImportGalaxyCsv(e) {
       if ("model" in r)  o.model = r.model ?? null;
       if ("serial" in r) o.serial = toSerialString(r.serial);            // Galaxy Try = serial
       if ("note" in r)   o.note  = r.note ?? null;
-      if ("finished" in r || "returned" in r) {
-        const val = r.finished ?? r.returned;
+      if ("finished" in r) {
+        const val = r.finished;
         if (typeof val === "boolean") {
           o.finished = val ? "Yes" : "";
         } else if (val == null || val === "") {

@@ -125,7 +125,7 @@ const normalizeBackendRow = (r: any): TryBuyRecord => {
     model:         r["Model"]         ?? r.model         ?? "",
     serial:        r["Serial"]        ?? r.serial        ?? "",
     note:          r["Note"]          ?? r.note          ?? "",
-    finished:      Boolean(r.finished ?? r.returned),
+    finished:      Boolean(r.finished),
     user_feedback:     r["User Feedback"] ?? r.user_feedback ?? "",
   };
 };
@@ -151,7 +151,7 @@ const mapUiToImportRow = (r: TryBuyRecord): ImportRow => {
     // UI koristi "YYYY-MM-DD"; backend smije primiti ISO @ 00:00:00Z
     return `${s}T00:00:00.000Z`;
   };
-  const finishedRaw = (r as any).finished ?? (r as any).returned;
+  const finishedRaw = (r as any).finished;
   const finished =
     typeof finishedRaw === "boolean"
       ? finishedRaw ? "Yes" : ""

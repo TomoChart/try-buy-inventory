@@ -83,7 +83,7 @@ function DetailPage() {
         const rawDays = data["Days Left"] ?? data.days_left;
         setDaysLeft(rawDays === null || rawDays === undefined || rawDays === "" ? "" : String(rawDays));
 
-        const finishedRaw = data["Finished"] ?? data.finished ?? data["Returned"] ?? data.returned;
+        const finishedRaw = data["Finished"] ?? data.finished;
         const finishedNormalized = typeof finishedRaw === "string"
           ? finishedRaw.trim().toLowerCase()
           : finishedRaw;
