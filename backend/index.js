@@ -636,150 +636,108 @@ app.get('/admin/galaxy-try/:code/list',
     );
 
 // === GALAXY TRY HR: Import (CSV/XLSX) — upsert s created_at + normalizacija ===
-app.post('/admin/galaxy-try/hr/import',
-  requireAuth, requireRole('country_admin','superadmin'),
+// -------- IMPORT: GALAXY-TRY (HR/SI/RS) ------------------------
+app.post(
+  "/admin/galaxy-try/:code/import",
+  requireAuth,
+  requireRole("country_admin", "superadmin"),
   async (req, res) => {
     try {
-      const { rows } = req.body || {};
-      if (!Array.isArray(rows) || !rows.length) {
-        return res.status(400).json({ error: 'No rows provided' });
+      const code = String(req.params.code || "").toUpperCase();
+      if (!["HR", "SI", "RS"].includes(code)) {
+        return res.status(400).json({ error: "Invalid country code (use HR, SI, or RS)." });
+      }
+      const body = req.body || {};
+      const rows = Array.isArray(body.rows) ? body.rows : body; // podrži i plain array
+
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return res.status(400).json({ error: "No rows provided" });
       }
 
-      const isoOrNull = (v) => {
-        if (v == null || v === '') return null;
-        const d = new Date(v);
-        return isNaN(d) ? null : d.toISOString();
-      };
-      const numOrNull = (v) => (v === '' || v == null ? null : Number.isFinite(Number(v)) ? Number(v) : null);
-      const strOrNull = (v) => {
-        if (v == null) return null;
-        const s = String(v).trim();
-        return s === '' ? null : s;
-      };
-      const serialStr = (v) => {
-        if (v == null) return null;
-        const s = String(v).trim().replace(/\s+/g, '');
-        return s === '' ? null : s;
+      // normalizatori (sve su TEXT kolone u leads_import)
+      const strOrNull = (v) => (v == null || v === "" ? null : String(v));
+      const yesOrEmpty = (v) => {
+        // podrži "Yes"/"", boolean true/false, 1/0
+        if (v === true || v === "true" || v === 1 || v === "1" || v === "Yes") return "Yes";
+        return v == null || v === "" || v === false || v === "0" ? "" : String(v);
       };
 
-
-      let upserted = 0;
-
+      // pripremi batched parametre
+      const values = [];
       for (const r of rows) {
-        if (!r.submission_id) continue;
-
-        // === Normalize created_at, contacted, handover_at ===
-        if (r.created_at) {
-          let d = String(r.created_at);
-          if (d.includes(' ')) d = d.split(' ')[0];
-          if (/^\d{2}-\d{2}-\d{4}$/.test(d)) {
-            const [day, mon, yr] = d.split('-');
-            d = `${yr}-${mon}-${day}`;
-          }
-          r.created_at = new Date(`${d}T00:00:00Z`);
-        }
-    
-        
-        if (r.handover_at) {
-          let d = String(r.handover_at);
-          if (d.includes(' ')) d = d.split(' ')[0];
-          if (/^\d{2}-\d{2}-\d{4}$/.test(d)) {
-            const [day, mon, yr] = d.split('-');
-            d = `${yr}-${mon}-${day}`;
-          }
-          r.handover_at = new Date(`${d}T00:00:00Z`);
-        }
-
-        // Normalizacija ulaza
-        const finishedRaw = r.finished
-        const p = {
-          first_name:  strOrNull(r.first_name),
-          last_name:   strOrNull(r.last_name),
-          email:       strOrNull(r.email),
-          phone:       strOrNull(r.phone),
-          address:     strOrNull(r.address),
-          city:        strOrNull(r.city),
+        values.push({
+          country_code: code,
+          submission_id: strOrNull(r.submission_id),
+          created_at: strOrNull(r.created_at),
+          first_name: strOrNull(r.first_name),
+          last_name: strOrNull(r.last_name),
+          email: strOrNull(r.email),
+          phone: strOrNull(r.phone),
+          address: strOrNull(r.address),
+          city: strOrNull(r.city),
+          postal_code: strOrNull(r.postal_code),
           pickup_city: strOrNull(r.pickup_city),
-          created_at:  isoOrNull(r.created_at),   // ⇐ NOVO
-          contacted:   isoOrNull(r.contacted),
-          handover_at: isoOrNull(r.handover_at),
-          days_left:   numOrNull(r.days_left),
-          model:       strOrNull(r.model),
-          serial:      serialStr(r.serial),
-          note:        strOrNull(r.note),
-          user_feedback:        strOrNull(r.user_feedback),
-          finished:  typeof finishedRaw === 'boolean'
-            ? (finishedRaw ? 'Yes' : '')
-            : strOrNull(finishedRaw)
-        };
+          contacted: strOrNull(r.contacted),       // očekuje "Yes" ili ""
+          handover_at: strOrNull(r.handover_at),
+          model: strOrNull(r.model),
+          serial: strOrNull(r.serial),
+          note: strOrNull(r.note),
+          user_feedback: strOrNull(r.user_feedback ?? r.feedback),
+          days_left: strOrNull(r.days_left),
+          finished: yesOrEmpty(r.finished),        // <— KLJUČNO: mapiramo ispravno
+        });
+      }
 
-        // UPDATE (uključuje created_at)
-        const qU = `
-          UPDATE leads_import SET
-            first_name  = COALESCE($2, first_name),
-            last_name   = COALESCE($3, last_name),
-            email       = COALESCE($4, email),
-            phone       = COALESCE($5, phone),
-            address     = COALESCE($6, address),
-            city        = COALESCE($7, city),
-            pickup_city = COALESCE($8, pickup_city),
-            created_at  = COALESCE($9, created_at),
-            contacted   = COALESCE($10, contacted),
-            handover_at = COALESCE($11, handover_at),
-            days_left   = COALESCE($12, days_left),
-            model       = COALESCE($13, model),
-            serial      = COALESCE($14, serial),
-          note        = COALESCE($15, note),
-          finished    = COALESCE($16, finished),
-          user_feedback        = COALESCE($17, user_feedback),
-                       
-            updated_at  = NOW()
-          WHERE submission_id = $1 AND country_code = 'HR'
+      // parametrizirani UPSERT jedan-po-jedan (sigurno i čitljivo)
+      let upserted = 0;
+      for (const v of values) {
+        const sql = `
+          INSERT INTO public.leads_import (
+            country_code, submission_id, created_at, first_name, last_name, email, phone,
+            address, city, postal_code, pickup_city, contacted, handover_at, model, serial,
+            note, user_feedback, days_left, finished
+          )
+          VALUES (
+            $1,$2,$3,$4,$5,$6,$7,
+            $8,$9,$10,$11,$12,$13,$14,$15,
+            $16,$17,$18,$19
+          )
+          ON CONFLICT (submission_id) DO UPDATE SET
+            country_code  = EXCLUDED.country_code,
+            created_at    = COALESCE(EXCLUDED.created_at,    leads_import.created_at),
+            first_name    = COALESCE(EXCLUDED.first_name,    leads_import.first_name),
+            last_name     = COALESCE(EXCLUDED.last_name,     leads_import.last_name),
+            email         = COALESCE(EXCLUDED.email,         leads_import.email),
+            phone         = COALESCE(EXCLUDED.phone,         leads_import.phone),
+            address       = COALESCE(EXCLUDED.address,       leads_import.address),
+            city          = COALESCE(EXCLUDED.city,          leads_import.city),
+            postal_code   = COALESCE(EXCLUDED.postal_code,   leads_import.postal_code),
+            pickup_city   = COALESCE(EXCLUDED.pickup_city,   leads_import.pickup_city),
+            contacted     = COALESCE(EXCLUDED.contacted,     leads_import.contacted),
+            handover_at   = COALESCE(EXCLUDED.handover_at,   leads_import.handover_at),
+            model         = COALESCE(EXCLUDED.model,         leads_import.model),
+            serial        = COALESCE(EXCLUDED.serial,        leads_import.serial),
+            note          = COALESCE(EXCLUDED.note,          leads_import.note),
+            user_feedback = COALESCE(EXCLUDED.user_feedback, leads_import.user_feedback),
+            days_left     = COALESCE(EXCLUDED.days_left,     leads_import.days_left),
+            finished      = COALESCE(EXCLUDED.finished,      leads_import.finished)
         `;
-        const vU = [
-          r.submission_id,
-          p.first_name, p.last_name, p.email, p.phone,
-          p.address, p.city, p.pickup_city,
-          p.created_at, p.contacted, p.handover_at,
-          p.days_left, p.model, p.serial, p.note, p.finished, p.user_feedback
-        ];
-        const updated = await prisma.$executeRawUnsafe(qU, ...vU);
-
-        // INSERT ako ne postoji (s created_at)
-        if (!updated) {
-          const qI = `
-            INSERT INTO leads_import (
-              submission_id, country_code,
-              first_name,last_name,email,phone,address,city,pickup_city,
-              created_at,contacted,handover_at,days_left,model,serial,note,finished,user_feedback,
-              updated_at
-            ) VALUES (
-              $1,'HR',
-              $2,$3,$4,$5,$6,$7,$8,
-              $9,$10,$11,$12,$13,$14,$15,$16,$17,
-              NOW()
-            )
-          `;
-          const vI = [
-            r.submission_id,
-            p.first_name, p.last_name, p.email, p.phone,
-            p.address, p.city, p.pickup_city,
-            p.created_at, p.contacted, p.handover_at,
-            p.days_left, p.model, p.serial, p.note, p.finished, p.user_feedback
-          ];
-          await prisma.$executeRawUnsafe(qI, ...vI);
-        }
-
+        await prisma.$executeRawUnsafe(sql,
+          v.country_code, v.submission_id, v.created_at, v.first_name, v.last_name, v.email, v.phone,
+          v.address, v.city, v.postal_code, v.pickup_city, v.contacted, v.handover_at, v.model, v.serial,
+          v.note, v.user_feedback, v.days_left, v.finished
+        );
         upserted++;
       }
 
-      return res.json({ upserted, mode: 'upsert' });
+      return res.json({ ok: true, upserted, mode: "upsert" });
     } catch (e) {
-      console.error('Import error', e);
-      return res.status(500).json({ error: 'Import error' });
+      console.error("IMPORT galaxy-try error", e);
+      return res.status(500).json({ error: "Import error" });
     }
   }
 );
+
 
 
 // 6) start server

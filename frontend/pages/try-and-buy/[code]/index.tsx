@@ -183,7 +183,7 @@ async function importToBackend(country: string, rows: TryBuyRecord[]) {
   rows: rows.map(mapUiToImportRow).filter(r => r.email || r.phone || r.serial),
 };
 
-  const res = await fetch(`${API}/admin/galaxy-try/${String(country).toUpperCase()}/import?mode=upsert`, {
+  const res = await fetch(`${API}/admin/try-and-buy/${String(country).toUpperCase()}/import?mode=upsert`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -215,7 +215,7 @@ function TryAndBuyPage() {
         const token = getToken();
         if (!token) { toast.error("Session expired. Login again."); return; }
         const code = String(country).toUpperCase(); // HR / SI / RS
-        const res = await fetch(`${API}/admin/galaxy-try/${code}/list`, {
+        const res = await fetch(`${API}/admin/try-and-buy/${code}/list`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (!res.ok) throw new Error(await res.text());
@@ -421,7 +421,7 @@ function TryAndBuyPage() {
       const token = getToken();
       if (!token) { toast.error("Session expired. Login again."); return; }
       const codeUpper = String(country).toUpperCase(); // HR / SI / RS
-      const res = await fetch(`${API}/admin/galaxy-try/${codeUpper}/list`, {
+      const res = await fetch(`${API}/admin/try-and-buy/${codeUpper}/list`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) throw new Error(await res.text());
@@ -444,10 +444,10 @@ function TryAndBuyPage() {
     const codeUpper = country.toUpperCase();
 
     try {
-      // Backend očekuje pojedinačni DELETE: /admin/galaxy-try/:code/:submission_id
+      // Backend očekuje pojedinačni DELETE: /admin/try-and-buy/:code/:submission_id
       await Promise.all(
         ids.map(id =>
-          fetch(`${API}/admin/galaxy-try/${codeUpper}/${encodeURIComponent(id)}`, {
+          fetch(`${API}/admin/try-and-buy/${codeUpper}/${encodeURIComponent(id)}`, {
             method: "DELETE",
             headers: { Authorization: `Bearer ${token}` },
           }).then(res => {
@@ -509,7 +509,7 @@ function TryAndBuyPage() {
         rows: mapRowsForImport(code, data), // <-- koristimo data, ne parsedRows
       };
 
-      const res = await fetch(`${API}/admin/galaxy-try/${code}/import?mode=upsert`, {
+      const res = await fetch(`${API}/admin/try-and-buy/${code}/import?mode=upsert`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -820,7 +820,7 @@ async function patchTryBuyField(countryCode: string, submissionId: string, field
 
   const { key, val } = mapField(field, value);
 
-  const res = await fetch(`${API}/admin/galaxy-try/${countryCode.toUpperCase()}/${encodeURIComponent(submissionId)}`, {
+  const res = await fetch(`${API}/admin/try-and-buy/${countryCode.toUpperCase()}/${encodeURIComponent(submissionId)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ [key]: val }),
