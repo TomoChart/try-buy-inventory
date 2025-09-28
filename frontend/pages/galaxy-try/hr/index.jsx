@@ -700,6 +700,9 @@ async function handleImportGalaxyCsv(e) {
       return o;
     }).filter(x => x.submission_id);
 
+    const totalRows = normalized.length;
+    const skippedRows = totalRows - out.length;
+
     // === DEBUG/PREVIEW & VALIDACIJA ===
     console.log("[GT-HR IMPORT] Preview first 3 mapped rows:", out.slice(0,3));
     const missing = [];
@@ -726,7 +729,10 @@ async function handleImportGalaxyCsv(e) {
     const dataRes = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(dataRes?.error || "Import failed");
 
-    alert(`Import gotov. Upsertano: ${dataRes?.upserted ?? "n/a"}`);
+    const modeLabel = dataRes?.mode || "upsert";
+    const upsertedCount = dataRes?.upserted ?? "n/a";
+    const skippedLabel = skippedRows > 0 ? `, preskočeno: ${skippedRows}` : "";
+    alert(`Import gotov (${modeLabel}). Upsertano: ${upsertedCount}${skippedLabel}`);
   } catch (err) {
     console.error(err);
     alert(`Greška pri importu: ${err.message}`);
