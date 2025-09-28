@@ -24,6 +24,9 @@ function GalaxyTryHRPage() {
   const [sort, setSort] = useState({ key: "", dir: "asc" });
   const [openMenu, setOpenMenu] = useState(null);
 
+  const asString = (value, fallback = "") =>
+    value === null || value === undefined ? fallback : String(value);
+
   // koji red editiramo
   const [editingId, setEditingId] = useState(null);
   // lokalna polja za edit
@@ -68,7 +71,7 @@ function GalaxyTryHRPage() {
       model: fModel || null,
       serial: fSerial || null,
     };
-    const r = await fetch(`${API}/admin/galaxy-try/hr/${id}`, {
+    const r = await fetch(`${API}/admin/galaxy-try/hr/${encodeURIComponent(id)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify(body),
@@ -99,24 +102,24 @@ function GalaxyTryHRPage() {
       return Boolean(val);
     };
     return {
-      submission_id: r.submission_id ?? r["Submission ID"] ?? "",
-      country_code:  r.country_code  ?? r["Country Code"]  ?? "",
-      first_name:    r.first_name    ?? r["First Name"]    ?? "",
-      last_name:     r.last_name     ?? r["Last Name"]     ?? "",
-      email:         r.email         ?? r["Email"]         ?? "",
-      phone:         r.phone         ?? r["Phone"]         ?? "",
-      address:       r.address       ?? r["Address"]       ?? "",
-      city:          r.city          ?? r["City"]          ?? "",
-      pickup_city:   r.pickup_city   ?? r["Pickup City"]   ?? "",
-      created_at:    r.created_at    ?? r["Created At"]    ?? "",
+      submission_id: asString(r.submission_id ?? r["Submission ID"] ?? ""),
+      country_code:  asString(r.country_code  ?? r["Country Code"]  ?? ""),
+      first_name:    asString(r.first_name    ?? r["First Name"]    ?? ""),
+      last_name:     asString(r.last_name     ?? r["Last Name"]     ?? ""),
+      email:         asString(r.email         ?? r["Email"]         ?? ""),
+      phone:         asString(r.phone         ?? r["Phone"]         ?? ""),
+      address:       asString(r.address       ?? r["Address"]       ?? ""),
+      city:          asString(r.city          ?? r["City"]          ?? ""),
+      pickup_city:   asString(r.pickup_city   ?? r["Pickup City"]   ?? ""),
+      created_at:    asString(r.created_at    ?? r["Created At"]    ?? ""),
       contacted:     toBool(contacted),
-      handover_at:   r.handover_at   ?? r["Handover At"]   ?? "",
+      handover_at:   asString(r.handover_at   ?? r["Handover At"]   ?? ""),
       days_left:     Number.isFinite(daysLeftNum) ? daysLeftNum : null,
-      model:         r.model         ?? r["Model"]         ?? "",
-      serial:        r.serial        ?? r["Serial"]        ?? "",
-      note:          r.note          ?? r["Note"]          ?? "",
+      model:         asString(r.model         ?? r["Model"]         ?? ""),
+      serial:        asString(r.serial        ?? r["Serial"]        ?? ""),
+      note:          asString(r.note          ?? r["Note"]          ?? ""),
       finished:      toBool(finishedRaw),
-      user_feedback: r.user_feedback ?? r["User Feedback"] ?? "",
+      user_feedback: asString(r.user_feedback ?? r["User Feedback"] ?? ""),
     };
   }
   async function handleDelete(submissionId) {
