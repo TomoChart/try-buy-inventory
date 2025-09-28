@@ -428,7 +428,7 @@ app.patch('/admin/galaxy-try/:code/:submission_id',
 
       const sql = `
         UPDATE leads_import
-        SET ${setClauses}, updated_at = NOW()
+        SET ${setClauses}
         WHERE submission_id = $${cols.length+1}
           AND country_code  = $${cols.length+2}
         RETURNING
@@ -520,8 +520,7 @@ app.post('/admin/galaxy-try/:code',
         INSERT INTO leads_import (${cols.map(c=>`"${c}"`).join(', ')})
         VALUES (${placeholders})
         ON CONFLICT (submission_id) DO UPDATE
-        SET ${Object.keys(payload).map((c,i)=>`"${c}" = EXCLUDED."${c}"`).join(', ')},
-            updated_at = NOW()
+        SET ${Object.keys(payload).map((c,i)=>`"${c}" = EXCLUDED."${c}"`).join(', ')}
         RETURNING
           submission_id        AS submission_id,
           country_code         AS country_code,
@@ -958,7 +957,7 @@ app.patch(
 
       const sql = `
         UPDATE leads_import
-        SET ${setClauses}, updated_at = NOW()
+        SET ${setClauses}
         WHERE submission_id = $${cols.length+1}
           AND country_code  = $${cols.length+2}
         RETURNING
@@ -1053,8 +1052,7 @@ app.post(
         INSERT INTO leads_import (${cols.map(c=>`"${c}"`).join(', ')})
         VALUES (${placeholders})
         ON CONFLICT (submission_id) DO UPDATE
-        SET ${Object.keys(payload).map((c,i)=>`"${c}" = EXCLUDED."${c}"`).join(', ')},
-            updated_at = NOW()
+        SET ${Object.keys(payload).map((c,i)=>`"${c}" = EXCLUDED."${c}"`).join(', ')}
         RETURNING
           submission_id        AS submission_id,
           country_code         AS country_code,
@@ -1262,8 +1260,7 @@ app.post('/admin/try-and-buy/hr/import',
             serial      = COALESCE($14, serial),
             note        = COALESCE($15, note),
             finished    = COALESCE($16, finished),
-            user_feedback        = COALESCE($17, user_feedback),
-            updated_at  = NOW()
+            user_feedback        = COALESCE($17, user_feedback)
           WHERE submission_id = $1 AND country_code = 'HR'
         `;
         const vU = [
