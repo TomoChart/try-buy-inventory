@@ -11,6 +11,28 @@ const app = express();
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+function toSerializable(value) {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'bigint') return value.toString();
+  if (Array.isArray(value)) return value.map(toSerializable);
+  if (value instanceof Date) return value;
+  if (typeof Buffer !== 'undefined' && Buffer.isBuffer(value)) return value;
+  if (typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, val]) => [key, toSerializable(val)])
+    );
+  }
+  return value;
+}
+
+app.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+  res.json = function patchedJson(body) {
+    return originalJson(toSerializable(body));
+  };
+  next();
+});
+
 // 2) CORS
 const cors = require('cors');
 const url = require('url');
