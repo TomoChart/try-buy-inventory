@@ -499,7 +499,7 @@ async function handleImportGalaxyCsv(e) {
     }
 
     // 2) normalizacija ključeva (kanonski nazivi koje backend očekuje)
-    const normRows = rows.map(r => {
+    const normalized = rows.map(r => {
       const g = (k) => {
         const keys = Object.keys(r);
         const hit = keys.find(x => String(x).toLowerCase() === k);
@@ -535,7 +535,11 @@ async function handleImportGalaxyCsv(e) {
         note:           getAny('note','napomena'),
         form_name:      getAny('form_name'),
       };
-    }).filter(r => r.submission_id); // bez submission_id backend preskače
+    });
+
+    const normRows = normalized.filter(r => r.submission_id); // bez submission_id backend preskače
+    const totalRows = normalized.length;
+    const skippedRows = totalRows - normRows.length;
 
     if (!normRows.length) { alert('Nema valjanih redova (submission_id nedostaje).'); return; }
 
@@ -553,7 +557,10 @@ async function handleImportGalaxyCsv(e) {
     const data = await res.json().catch(()=> ({}));
     if (!res.ok) throw new Error(data?.error || 'Import failed');
 
-    alert(`Import gotov. Upsertano: ${data?.upserted ?? 'n/a'}`);
+    const modeLabel = data?.mode || 'upsert';
+    const upsertedCount = data?.upserted ?? 'n/a';
+    const skippedLabel = skippedRows > 0 ? `, preskočeno: ${skippedRows}` : '';
+    alert(`Import gotov (${modeLabel}). Upsertano: ${upsertedCount}${skippedLabel}`);
     // Ako treba, ovdje napravi refresh liste:
     // await reloadGalaxyList();
   } catch (err) {
